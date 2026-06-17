@@ -1,14 +1,11 @@
 [package]
 name = "app"
-version = "1.9.0"
+version = "0.9.1"
 description = "Turn your Telegram account into an unlimited, secure cloud storage drive. an Open-source desktop app built with Tauri, Rust, and React."
-authors = ["Cameron Amer"]
+authors = ["Ibnu Batuthah"]
 edition = "2021"
 
-
-
 [lib]
-
 name = "app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -75,4 +72,3 @@ ndk-context = "0.1.1"
 # Embed the WebView2 bootstrapper so the app works on Windows systems
 # where the WebView2 runtime is not pre-installed (fresh installs, servers, etc.)
 webview-install-mode = "embeddir"
-

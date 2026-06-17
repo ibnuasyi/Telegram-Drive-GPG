@@ -41,6 +41,7 @@ pub mod settings;
 pub mod sharing;
 pub mod video_metadata;
 pub mod archive;
+pub mod gpg;
 
 pub use auth::*;
 pub use fs::*;

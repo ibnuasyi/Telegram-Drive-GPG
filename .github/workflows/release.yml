@@ -3,7 +3,7 @@ name: "Release"
 on:
   push:
     tags:
-      - 'v*'  # Trigger on version tags like v1.0.0, v1.0.1
+      - "v*" # Trigger on version tags like v1.0.0, v1.0.1
 
 jobs:
   create-release:
@@ -14,11 +14,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Get version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-      
+
       - name: Extract changelog for this version
         id: changelog
         run: |
@@ -59,7 +59,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   tag_name: tag,
-                  name: `Telegram Drive v${process.env.RELEASE_VERSION}`,
+                  name: `Cicem Drive v${process.env.RELEASE_VERSION}`,
                   body: process.env.RELEASE_BODY,
                   draft: true,
                   prerelease: false
@@ -81,23 +81,23 @@ jobs:
         include:
           # Windows
           - platform: windows-latest
-            args: ''
-            target: ''
-          
+            args: ""
+            target: ""
+
           # Linux
           - platform: ubuntu-22.04
-            args: ''
-            target: ''
-            
+            args: ""
+            target: ""
+
           # macOS Intel
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
-            target: 'x86_64-apple-darwin'
-          
+            args: "--target x86_64-apple-darwin"
+            target: "x86_64-apple-darwin"
+
           # macOS Apple Silicon
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
-            target: 'aarch64-apple-darwin'
+            args: "--target aarch64-apple-darwin"
+            target: "aarch64-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -212,7 +212,7 @@ jobs:
           # ── Write new AppRun ──
           cat > squashfs-root/AppRun << 'APPRUN_EOF'
           #!/usr/bin/env bash
-          # ── Telegram Drive — cross-distro AppRun wrapper ──
+          # ── Cicem Drive — cross-distro AppRun wrapper ──
           # Fixes EGL_BAD_ALLOC on Arch/Fedora/rolling-release distros by ensuring
           # the host's GPU driver stack is used instead of bundled Ubuntu Mesa libs.
           set -u

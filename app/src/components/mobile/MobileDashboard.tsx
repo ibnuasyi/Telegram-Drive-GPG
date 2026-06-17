@@ -1,34 +1,34 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Folder, Download, Menu, LogOut, RefreshCw, UploadCloud, MoreVertical, Trash2, Pencil, Globe, Shield, Lock, ChevronDown, Share2, Link, Copy, Check, X, Loader2, Wifi, Activity, Zap, Eye, EyeOff } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
-import { listen } from '@tauri-apps/api/event';
-import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { BottomNavBar } from './BottomNavBar';
-import { TouchFileList } from './TouchFileList';
-import { ThemeToggle } from '../shared/ThemeToggle';
-import AdsterraBanner from '../shared/AdsterraBanner';
-import { ActionPopover, ActionItem } from './ActionPopover';
-import { ShareDialog } from '../desktop/dashboard/ShareDialog';
-import { RenameFolderSheet } from './RenameFolderSheet';
-import { usePlatform } from '../../hooks/usePlatform';
-import { useTelegramConnection } from '../../hooks/useTelegramConnection';
-import { useFileUpload } from '../../hooks/useFileUpload';
-import { useFileDownload } from '../../hooks/useFileDownload';
-import { useFileOperations } from '../../hooks/useFileOperations';
-import { formatBytes, isMediaFile, isPdfFile, isImageFile, nativeShareOrCopy, copyToClipboard } from '../../utils';
-import { MediaPlayer } from '../desktop/dashboard/MediaPlayer';
-import { PdfViewer } from '../desktop/dashboard/PdfViewer';
-import { PreviewModal } from '../desktop/dashboard/PreviewModal';
-import { useTheme } from '../../context/ThemeContext';
-import { TelegramFile, TelegramFolder, ShareInfo, BandwidthStats } from '../../types';
-import { useSettings } from '../../context/SettingsContext';
-import { version as appVersion } from '../../../package.json';
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { Folder, Download, Menu, LogOut, RefreshCw, UploadCloud, MoreVertical, Trash2, Pencil, Globe, Shield, Lock, ChevronDown, Share2, Link, Copy, Check, X, Loader2, Wifi, Activity, Zap, Eye, EyeOff } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { listen } from "@tauri-apps/api/event";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { BottomNavBar } from "./BottomNavBar";
+import { TouchFileList } from "./TouchFileList";
+import { ThemeToggle } from "../shared/ThemeToggle";
+import AdsterraBanner from "../shared/AdsterraBanner";
+import { ActionPopover, ActionItem } from "./ActionPopover";
+import { ShareDialog } from "../desktop/dashboard/ShareDialog";
+import { RenameFolderSheet } from "./RenameFolderSheet";
+import { usePlatform } from "../../hooks/usePlatform";
+import { useTelegramConnection } from "../../hooks/useTelegramConnection";
+import { useFileUpload } from "../../hooks/useFileUpload";
+import { useFileDownload } from "../../hooks/useFileDownload";
+import { useFileOperations } from "../../hooks/useFileOperations";
+import { formatBytes, isMediaFile, isPdfFile, isImageFile, nativeShareOrCopy, copyToClipboard } from "../../utils";
+import { MediaPlayer } from "../desktop/dashboard/MediaPlayer";
+import { PdfViewer } from "../desktop/dashboard/PdfViewer";
+import { PreviewModal } from "../desktop/dashboard/PreviewModal";
+import { useTheme } from "../../context/ThemeContext";
+import { TelegramFile, TelegramFolder, ShareInfo, BandwidthStats } from "../../types";
+import { useSettings } from "../../context/SettingsContext";
+import { version as appVersion } from "../../../package.json";
 
 export default function MobileDashboard({ onLogout }: { onLogout?: () => void }) {
-  const [activeTab, setActiveTab] = useState<'files' | 'downloads' | 'settings'>('files');
+  const [activeTab, setActiveTab] = useState<"files" | "downloads" | "settings">("files");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { isAndroid } = usePlatform();
   const { theme } = useTheme();
@@ -47,10 +47,12 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
           }
         });
       } catch (e) {
-        console.warn('[DeepLink] Failed to register listener:', e);
+        console.warn("[DeepLink] Failed to register listener:", e);
       }
     })();
-    return () => { unlisten?.(); };
+    return () => {
+      unlisten?.();
+    };
   }, [isAndroid]);
 
   // ── Android share-received listener (warm start) ──────────────────────
@@ -59,18 +61,20 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
     let unlisten: (() => void) | undefined;
     (async () => {
       try {
-        unlisten = await listen<{ count: number }>('share-received', (event) => {
+        unlisten = await listen<{ count: number }>("share-received", (event) => {
           const count = event.payload?.count ?? 0;
           if (count > 0) {
-            const label = count === 1 ? '1 file' : `${count} files`;
+            const label = count === 1 ? "1 file" : `${count} files`;
             toast.success(`${label} received! Ready to upload.`, { duration: 4000 });
           }
         });
       } catch (e) {
-        console.warn('[Share] Failed to register listener:', e);
+        console.warn("[Share] Failed to register listener:", e);
       }
     })();
-    return () => { unlisten?.(); };
+    return () => {
+      unlisten?.();
+    };
   }, [isAndroid]);
 
   // ── Android cold-start share check ────────────────────────────────────
@@ -78,14 +82,14 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
     if (!isAndroid) return;
     (async () => {
       try {
-        const count = await invoke<number>('cmd_get_pending_share_count');
+        const count = await invoke<number>("cmd_get_pending_share_count");
         if (count > 0) {
-          const label = count === 1 ? '1 file' : `${count} files`;
+          const label = count === 1 ? "1 file" : `${count} files`;
           toast.success(`${label} received! Ready to upload.`, { duration: 4000 });
         }
       } catch (e) {
         // Best-effort; JNI cache may not be ready on very early mount
-        console.warn('[Share] Cold-start check failed (may be expected):', e);
+        console.warn("[Share] Cold-start check failed (may be expected):", e);
       }
     })();
   }, [isAndroid]);
@@ -94,7 +98,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
   useEffect(() => {
     const applyProxy = async () => {
       try {
-        await invoke('cmd_apply_proxy_settings', {
+        await invoke("cmd_apply_proxy_settings", {
           enabled: settings.proxyEnabled,
           proxyType: settings.proxyType,
           host: settings.proxyHost,
@@ -107,18 +111,12 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
       }
     };
     applyProxy();
-  }, [
-    settings.proxyEnabled, settings.proxyType, settings.proxyHost,
-    settings.proxyPort, settings.proxyUsername, settings.proxyPassword,
-  ]);
+  }, [settings.proxyEnabled, settings.proxyType, settings.proxyHost, settings.proxyPort, settings.proxyUsername, settings.proxyPassword]);
 
   const logoutHandler = useMemo(() => onLogout || (() => {}), [onLogout]);
 
-  const {
-    store, folders, activeFolderId, setActiveFolderId, isSyncing, isConnected,
-    handleLogout, handleSyncFolders, handleCreateFolder, handleFolderDelete,
-    handleFolderRename, handleFolderToggleVisibility, handleExportFolderInvite
-  } = useTelegramConnection(logoutHandler);
+  const { store, folders, activeFolderId, setActiveFolderId, isSyncing, isConnected, handleLogout, handleSyncFolders, handleCreateFolder, handleFolderDelete, handleFolderRename, handleFolderToggleVisibility, handleExportFolderInvite } =
+    useTelegramConnection(logoutHandler);
 
   const { handleManualUpload } = useFileUpload(activeFolderId, store);
   const { queueDownload, queueBulkDownload } = useFileDownload(store);
@@ -138,26 +136,26 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
 
   const { data: bandwidth } = useQuery({
-    queryKey: ['bandwidth'],
-    queryFn: () => invoke<BandwidthStats>('cmd_get_bandwidth'),
-    refetchInterval: activeTab === 'settings' ? 5000 : false,
+    queryKey: ["bandwidth"],
+    queryFn: () => invoke<BandwidthStats>("cmd_get_bandwidth"),
+    refetchInterval: activeTab === "settings" ? 5000 : false,
   });
 
   const handleCheckLatency = useCallback(async () => {
     setCheckingLatency(true);
     setLatencyMs(null);
     try {
-      const ms = await invoke<number>('cmd_check_latency');
+      const ms = await invoke<number>("cmd_check_latency");
       setLatencyMs(ms);
       if (ms >= 0) {
-        const emoji = ms < 100 ? '🟢' : ms < 250 ? '🟡' : '🔴';
+        const emoji = ms < 100 ? "🟢" : ms < 250 ? "🟡" : "🔴";
         toast.success(`${emoji} Ping: ${ms}ms to Telegram DC`);
       } else {
-        toast.error('Unable to reach Telegram servers');
+        toast.error("Unable to reach Telegram servers");
       }
     } catch (e) {
-      console.warn('Ping check failed:', e);
-      toast.error('Unable to reach Telegram servers');
+      console.warn("Ping check failed:", e);
+      toast.error("Unable to reach Telegram servers");
       setLatencyMs(-1);
     } finally {
       setCheckingLatency(false);
@@ -175,42 +173,43 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
   }
 
   const { data: cachedFiles = [], refetch: refetchCachedFiles } = useQuery({
-    queryKey: ['cached-files'],
-    queryFn: () => invoke<CachedFileEntry[]>('cmd_list_cached_files'),
+    queryKey: ["cached-files"],
+    queryFn: () => invoke<CachedFileEntry[]>("cmd_list_cached_files"),
     enabled: isAndroid,
     refetchInterval: isAndroid ? 5000 : false, // poll while app is open (lightweight)
   });
 
-  const handleUploadCachedFile = useCallback(async (entry: CachedFileEntry) => {
-    const tid = `cache-upload-${++transferIdCounter.current}-${Date.now()}`;
-    setUploadingCacheFiles(prev => new Set(prev).add(entry.cached_path));
-    try {
-      await invoke<string>('cmd_upload_file', {
-        path: entry.cached_path,
-        folderId: activeFolderId,
-        transferId: tid,
-      });
-      toast.success(`Uploaded: ${entry.file_name}`);
-      // Refresh the list to remove the uploaded entry
-      refetchCachedFiles();
-    } catch (e) {
-      toast.error(`Upload failed: ${e}`);
-    } finally {
-      setUploadingCacheFiles(prev => {
-        const next = new Set(prev);
-        next.delete(entry.cached_path);
-        return next;
-      });
-    }
-  }, [activeFolderId, refetchCachedFiles]);
+  const handleUploadCachedFile = useCallback(
+    async (entry: CachedFileEntry) => {
+      const tid = `cache-upload-${++transferIdCounter.current}-${Date.now()}`;
+      setUploadingCacheFiles((prev) => new Set(prev).add(entry.cached_path));
+      try {
+        await invoke<string>("cmd_upload_file", {
+          path: entry.cached_path,
+          folderId: activeFolderId,
+          transferId: tid,
+        });
+        toast.success(`Uploaded: ${entry.file_name}`);
+        // Refresh the list to remove the uploaded entry
+        refetchCachedFiles();
+      } catch (e) {
+        toast.error(`Upload failed: ${e}`);
+      } finally {
+        setUploadingCacheFiles((prev) => {
+          const next = new Set(prev);
+          next.delete(entry.cached_path);
+          return next;
+        });
+      }
+    },
+    [activeFolderId, refetchCachedFiles],
+  );
 
   const handleClearCachedFiles = useCallback(async () => {
     try {
-      await Promise.all(cachedFiles.map(entry =>
-        invoke('cmd_remove_cached_path', { uri: entry.uri }).catch(() => {})
-      ));
+      await Promise.all(cachedFiles.map((entry) => invoke("cmd_remove_cached_path", { uri: entry.uri }).catch(() => {})));
       refetchCachedFiles();
-      toast.success('Shared files cleared');
+      toast.success("Shared files cleared");
     } catch (e) {
       toast.error(`Failed to clear: ${e}`);
     }
@@ -218,12 +217,15 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
 
   // Real files loader
   const { data: allFiles = [], isLoading } = useQuery({
-    queryKey: ['files', activeFolderId],
-    queryFn: () => invoke<any[]>('cmd_get_files', { folderId: activeFolderId }).then(res => res.map(f => ({
-      ...f,
-      sizeStr: formatBytes(f.size),
-      type: f.icon_type || (f.name.endsWith('/') ? 'folder' : 'file')
-    }))),
+    queryKey: ["files", activeFolderId],
+    queryFn: () =>
+      invoke<any[]>("cmd_get_files", { folderId: activeFolderId }).then((res) =>
+        res.map((f) => ({
+          ...f,
+          sizeStr: formatBytes(f.size),
+          type: f.icon_type || (f.name.endsWith("/") ? "folder" : "file"),
+        })),
+      ),
     enabled: !!store,
   });
 
@@ -231,95 +233,117 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
   const [fileRenames, setFileRenames] = useState<Map<number, string>>(new Map());
   const { handleDelete: handleDeleteOp, handleBulkDelete, handleBulkDownload, handleBulkMove } = useFileOperations(activeFolderId, selectedIds, setSelectedIds, allFiles, queueBulkDownload);
 
-  const activeFolder = activeFolderId === null
-    ? 'Saved Messages'
-    : folders.find(f => f.id === activeFolderId)?.name || 'Unknown Channel';
+  const activeFolder = activeFolderId === null ? "Saved Messages" : folders.find((f) => f.id === activeFolderId)?.name || "Unknown Channel";
 
   // Folder action menu state (replaces swipe-to-reveal)
   const [folderActionMenu, setFolderActionMenu] = useState<TelegramFolder | null>(null);
   const [renameFolder, setRenameFolder] = useState<{ id: number; name: string } | null>(null);
 
-  const handleFolderVisibilityToggle = useCallback(async (folder: TelegramFolder) => {
-    const isPublic = folder.is_public || !!folder.username;
-    if (isPublic) {
-      // Make private
-      try {
-        await handleFolderToggleVisibility(folder.id, false);
-      } catch { /* error already toasted */ }
-    } else {
-      // Make public — prompt for optional username
-      const defaultUsername = folder.name.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30);
-      const username = prompt(`Make "${folder.name}" public. Enter a username (leave empty for auto-generated):`, defaultUsername)?.trim();
-      if (username === undefined) return; // cancelled
-      try {
-        await handleFolderToggleVisibility(folder.id, true, username || undefined);
-      } catch { /* error already toasted */ }
-    }
-  }, [handleFolderToggleVisibility]);
-
-  const handleFolderShareInvite = useCallback(async (folder: TelegramFolder) => {
-    try {
-      const info = await handleExportFolderInvite(folder.id);
-      try {
-        await copyToClipboard(info.link);
-        toast.success(`Invite link copied: ${info.link}`);
-      } catch (e) {
-        toast.error(`Failed to copy to clipboard: ${e}`);
+  const handleFolderVisibilityToggle = useCallback(
+    async (folder: TelegramFolder) => {
+      const isPublic = folder.is_public || !!folder.username;
+      if (isPublic) {
+        // Make private
+        try {
+          await handleFolderToggleVisibility(folder.id, false);
+        } catch {
+          /* error already toasted */
+        }
+      } else {
+        // Make public — prompt for optional username
+        const defaultUsername = folder.name
+          .toLowerCase()
+          .replace(/[^a-z0-9_]/g, "")
+          .slice(0, 30);
+        const username = prompt(`Make "${folder.name}" public. Enter a username (leave empty for auto-generated):`, defaultUsername)?.trim();
+        if (username === undefined) return; // cancelled
+        try {
+          await handleFolderToggleVisibility(folder.id, true, username || undefined);
+        } catch {
+          /* error already toasted */
+        }
       }
-    } catch { /* backend error already toasted in hook */ }
-  }, [handleExportFolderInvite]);
+    },
+    [handleFolderToggleVisibility],
+  );
 
-  const buildFolderActions = useCallback((folder: TelegramFolder): ActionItem[] => {
-    const isPublic = folder.is_public || !!folder.username;
-    return [
-      {
-        label: 'Rename',
-        icon: <Pencil className="w-4 h-4" />,
-        onClick: () => {
-          setFolderActionMenu(null);
-          setRenameFolder({ id: folder.id, name: folder.name });
+  const handleFolderShareInvite = useCallback(
+    async (folder: TelegramFolder) => {
+      try {
+        const info = await handleExportFolderInvite(folder.id);
+        try {
+          await copyToClipboard(info.link);
+          toast.success(`Invite link copied: ${info.link}`);
+        } catch (e) {
+          toast.error(`Failed to copy to clipboard: ${e}`);
+        }
+      } catch {
+        /* backend error already toasted in hook */
+      }
+    },
+    [handleExportFolderInvite],
+  );
+
+  const buildFolderActions = useCallback(
+    (folder: TelegramFolder): ActionItem[] => {
+      const isPublic = folder.is_public || !!folder.username;
+      return [
+        {
+          label: "Rename",
+          icon: <Pencil className="w-4 h-4" />,
+          onClick: () => {
+            setFolderActionMenu(null);
+            setRenameFolder({ id: folder.id, name: folder.name });
+          },
         },
-      },
-      {
-        label: isPublic ? 'Make Private' : 'Make Public',
-        icon: isPublic ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />,
-        onClick: () => handleFolderVisibilityToggle(folder),
-      },
-      {
-        label: 'Copy Invite Link',
-        icon: <Link className="w-4 h-4" />,
-        onClick: () => handleFolderShareInvite(folder),
-      },
-      {
-        label: 'Delete',
-        icon: <Trash2 className="w-4 h-4" />,
-        onClick: () => handleFolderDelete(folder.id, folder.name),
-        destructive: true,
-      },
-    ];
-  }, [handleFolderDelete, handleFolderVisibilityToggle, handleFolderShareInvite]);
+        {
+          label: isPublic ? "Make Private" : "Make Public",
+          icon: isPublic ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />,
+          onClick: () => handleFolderVisibilityToggle(folder),
+        },
+        {
+          label: "Copy Invite Link",
+          icon: <Link className="w-4 h-4" />,
+          onClick: () => handleFolderShareInvite(folder),
+        },
+        {
+          label: "Delete",
+          icon: <Trash2 className="w-4 h-4" />,
+          onClick: () => handleFolderDelete(folder.id, folder.name),
+          destructive: true,
+        },
+      ];
+    },
+    [handleFolderDelete, handleFolderVisibilityToggle, handleFolderShareInvite],
+  );
 
   const handleSelectAll = useCallback(() => {
     if (selectedIds.length === allFiles.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(allFiles.map(f => f.id));
+      setSelectedIds(allFiles.map((f) => f.id));
     }
   }, [selectedIds.length, allFiles]);
 
   const handleClearSelection = useCallback(() => setSelectedIds([]), []);
 
   const handleToggleSelection = useCallback((id: number) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   }, []);
 
-  const handleDownload = useCallback((file: TelegramFile) => {
-    queueDownload(file.id, file.name, activeFolderId);
-  }, [queueDownload, activeFolderId]);
+  const handleDownload = useCallback(
+    (file: TelegramFile) => {
+      queueDownload(file.id, file.name, activeFolderId);
+    },
+    [queueDownload, activeFolderId],
+  );
 
-  const handleDeleteFile = useCallback((file: TelegramFile) => {
-    handleDeleteOp(file.id);
-  }, [handleDeleteOp]);
+  const handleDeleteFile = useCallback(
+    (file: TelegramFile) => {
+      handleDeleteOp(file.id);
+    },
+    [handleDeleteOp],
+  );
 
   const handlePreview = useCallback((file: TelegramFile) => {
     if (isMediaFile(file.name)) {
@@ -333,23 +357,26 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
     }
   }, []);
 
-  const handleRenameFile = useCallback((file: TelegramFile) => {
-    const currentName = fileRenames.get(file.id) || file.name;
-    const newName = prompt(`Rename "${currentName}":`, currentName);
-    if (!newName || !newName.trim() || newName.trim() === currentName) return;
-    setFileRenames(prev => {
-      const next = new Map(prev);
-      next.set(file.id, newName.trim());
-      return next;
-    });
-    toast.success(`Renamed to "${newName.trim()}"`);
-  }, [fileRenames]);
+  const handleRenameFile = useCallback(
+    (file: TelegramFile) => {
+      const currentName = fileRenames.get(file.id) || file.name;
+      const newName = prompt(`Rename "${currentName}":`, currentName);
+      if (!newName || !newName.trim() || newName.trim() === currentName) return;
+      setFileRenames((prev) => {
+        const next = new Map(prev);
+        next.set(file.id, newName.trim());
+        return next;
+      });
+      toast.success(`Renamed to "${newName.trim()}"`);
+    },
+    [fileRenames],
+  );
 
   // Bulk share: generate links for all selected non-folder files
   const handleBulkShare = useCallback(async () => {
-    const shareFiles = allFiles.filter(f => selectedIds.includes(f.id) && f.type !== 'folder');
+    const shareFiles = allFiles.filter((f) => selectedIds.includes(f.id) && f.type !== "folder");
     if (shareFiles.length === 0) {
-      toast.info('No shareable files selected (folders cannot be shared)');
+      toast.info("No shareable files selected (folders cannot be shared)");
       return;
     }
     // Open modal immediately with spinner
@@ -360,7 +387,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
       const results = await Promise.all(
         shareFiles.map(async (file) => {
           try {
-            const info = await invoke<ShareInfo>('cmd_create_share', {
+            const info = await invoke<ShareInfo>("cmd_create_share", {
               folderId: null,
               messageId: file.id,
               fileName: file.name,
@@ -373,7 +400,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
             toast.error(`Failed to share ${file.name}: ${e}`);
             return null;
           }
-        })
+        }),
       );
       const valid = results.filter((r): r is { file: TelegramFile; link: string } => r !== null);
       if (valid.length > 0) {
@@ -381,7 +408,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
         setSelectedIds([]); // Clear selection after successful bulk share
       } else {
         setBulkShareLinks(null);
-        toast.error('Failed to generate any share links');
+        toast.error("Failed to generate any share links");
       }
     } finally {
       setBulkShareLoading(false);
@@ -390,41 +417,52 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
 
   const handleCopyBulkLink = useCallback((link: string) => {
     navigator.clipboard.writeText(link);
-    setBulkShareCopied(prev => new Set(prev).add(link));
-    setTimeout(() => setBulkShareCopied(prev => {
-      const next = new Set(prev);
-      next.delete(link);
-      return next;
-    }), 2000);
+    setBulkShareCopied((prev) => new Set(prev).add(link));
+    setTimeout(
+      () =>
+        setBulkShareCopied((prev) => {
+          const next = new Set(prev);
+          next.delete(link);
+          return next;
+        }),
+      2000,
+    );
   }, []);
 
-  const handleNativeShareBulkLink = useCallback((file: TelegramFile, link: string) => {
-    nativeShareOrCopy(file.name, file.sizeStr, link, () => {
-      handleCopyBulkLink(link);
-    });
-  }, [handleCopyBulkLink]);
+  const handleNativeShareBulkLink = useCallback(
+    (file: TelegramFile, link: string) => {
+      nativeShareOrCopy(file.name, file.sizeStr, link, () => {
+        handleCopyBulkLink(link);
+      });
+    },
+    [handleCopyBulkLink],
+  );
 
   // ── Copy Telegram native t.me link ────────────────────────────────────
-  const handleCopyTelegramLink = useCallback((file: TelegramFile) => {
-    const folder = folders.find(f => f.id === file.folder_id) || folders.find(f => f.id === activeFolderId);
-    const username = folder?.username || (folder as any)?.chat?.username || (folder as any)?.channel?.username;
-    if (!username) {
-      toast.error('Only available for public channels');
-      return;
-    }
-    const url = `https://t.me/${username}/${file.id}`;
-    navigator.clipboard.writeText(url).then(() => {
-      toast.success('Telegram link copied');
-    }).catch(() => {
-      toast.error('Failed to copy link');
-    });
-  }, [folders, activeFolderId]);
+  const handleCopyTelegramLink = useCallback(
+    (file: TelegramFile) => {
+      const folder = folders.find((f) => f.id === file.folder_id) || folders.find((f) => f.id === activeFolderId);
+      const username = folder?.username || (folder as any)?.chat?.username || (folder as any)?.channel?.username;
+      if (!username) {
+        toast.error("Only available for public channels");
+        return;
+      }
+      const url = `https://t.me/${username}/${file.id}`;
+      navigator.clipboard
+        .writeText(url)
+        .then(() => {
+          toast.success("Telegram link copied");
+        })
+        .catch(() => {
+          toast.error("Failed to copy link");
+        });
+    },
+    [folders, activeFolderId],
+  );
 
   const displayFiles = useMemo(() => {
     if (fileRenames.size === 0) return allFiles;
-    return allFiles.map(f =>
-      fileRenames.has(f.id) ? { ...f, name: fileRenames.get(f.id)! } : f
-    );
+    return allFiles.map((f) => (fileRenames.has(f.id) ? { ...f, name: fileRenames.get(f.id)! } : f));
   }, [allFiles, fileRenames]);
 
   return (
@@ -434,15 +472,12 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
         <div className="flex items-center gap-3">
           <img src="/logo.svg" className="w-8 h-8 drop-shadow-lg" alt="Logo" />
           <div>
-            <h1 className={`text-base font-bold tracking-tight ${theme === 'light' ? 'text-[#1c1c1e]' : 'bg-gradient-to-r from-white to-telegram-subtext bg-clip-text text-transparent'}`}>Telegram Drive</h1>
+            <h1 className={`text-base font-bold tracking-tight ${theme === "light" ? "text-[#1c1c1e]" : "bg-gradient-to-r from-white to-telegram-subtext bg-clip-text text-transparent"}`}>Cicem Drive</h1>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="p-2 rounded-xl bg-telegram-hover/30 hover:bg-telegram-hover/60 border border-telegram-border/40 text-telegram-subtext transition-all duration-300"
-          >
+          <button onClick={() => setIsSidebarOpen(true)} className="p-2 rounded-xl bg-telegram-hover/30 hover:bg-telegram-hover/60 border border-telegram-border/40 text-telegram-subtext transition-all duration-300">
             <Menu className="w-5 h-5" />
           </button>
         </div>
@@ -450,7 +485,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
 
       {/* Main Viewport Container */}
       <main className="flex-1 overflow-y-auto px-4 py-3 space-y-4 pb-40 scroll-smooth">
-        {activeTab === 'files' && (
+        {activeTab === "files" && (
           <div className="space-y-4">
             {/* Folder Header Breadcrumb */}
             <div className="flex items-center justify-between bg-telegram-hover/20 p-3 rounded-2xl border border-telegram-border/30">
@@ -471,7 +506,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   disabled={isSyncing}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-telegram-primary/15 text-telegram-primary border border-telegram-primary/10 active:scale-95 transition-all duration-200 disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
                   Sync
                 </button>
               </div>
@@ -501,19 +536,17 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
           </div>
         )}
 
-        {activeTab === 'downloads' && (
+        {activeTab === "downloads" && (
           <div className="flex flex-col items-center justify-center h-[60vh] space-y-3 text-center px-6">
             <div className="p-4 rounded-full bg-telegram-primary/10 text-telegram-primary border border-telegram-primary/20">
               <Download className="w-8 h-8 animate-bounce" />
             </div>
             <h3 className="text-base font-bold">Transfers Queue</h3>
-            <p className="text-xs text-telegram-subtext max-w-xs leading-relaxed">
-              Downloads and uploads are safely queued and managed in the background.
-            </p>
+            <p className="text-xs text-telegram-subtext max-w-xs leading-relaxed">Downloads and uploads are safely queued and managed in the background.</p>
           </div>
         )}
 
-        {activeTab === 'settings' && (
+        {activeTab === "settings" && (
           <div className="space-y-4">
             <div className="p-4 rounded-2xl bg-telegram-hover/20 border border-telegram-border/30 space-y-4">
               <h3 className="text-sm font-bold text-telegram-primary tracking-wide uppercase text-[10px]">Preferences</h3>
@@ -523,10 +556,10 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   <p className="text-[10px] text-telegram-subtext">Compress folders into .zip before uploading</p>
                 </div>
                 <button
-                  onClick={() => updateSetting('zipFolders', !settings.zipFolders)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${settings.zipFolders ? 'bg-telegram-primary' : 'bg-telegram-border'}`}
+                  onClick={() => updateSetting("zipFolders", !settings.zipFolders)}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${settings.zipFolders ? "bg-telegram-primary" : "bg-telegram-border"}`}
                 >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${settings.zipFolders ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${settings.zipFolders ? "translate-x-5" : "translate-x-0"}`} />
                 </button>
               </div>
             </div>
@@ -545,10 +578,8 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   <p className="text-xs font-medium">Status</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                  <span className={`text-xs font-semibold ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                    {isConnected ? 'Connected' : 'Offline'}
-                  </span>
+                  <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
+                  <span className={`text-xs font-semibold ${isConnected ? "text-green-400" : "text-red-400"}`}>{isConnected ? "Connected" : "Offline"}</span>
                 </div>
               </div>
 
@@ -556,13 +587,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
               <div className="flex items-center justify-between py-2 border-b border-telegram-border/20">
                 <div>
                   <p className="text-xs font-medium">Ping to Telegram</p>
-                  <p className="text-[10px] text-telegram-subtext">
-                    {latencyMs !== null
-                      ? latencyMs >= 0
-                        ? `${latencyMs}ms`
-                        : 'Unreachable'
-                      : 'Not tested'}
-                  </p>
+                  <p className="text-[10px] text-telegram-subtext">{latencyMs !== null ? (latencyMs >= 0 ? `${latencyMs}ms` : "Unreachable") : "Not tested"}</p>
                 </div>
                 <button
                   onClick={handleCheckLatency}
@@ -588,13 +613,11 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                 <div className="flex items-center gap-2 py-1">
                   <div className="flex-1 h-1.5 rounded-full bg-telegram-border/30 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${latencyMs < 100 ? 'bg-green-500' : latencyMs < 250 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                      className={`h-full rounded-full transition-all duration-500 ${latencyMs < 100 ? "bg-green-500" : latencyMs < 250 ? "bg-yellow-500" : "bg-red-500"}`}
                       style={{ width: `${Math.min(100, Math.max(5, (500 - latencyMs) / 5))}%` }}
                     />
                   </div>
-                  <span className={`text-[10px] font-semibold ${latencyMs < 100 ? 'text-green-400' : latencyMs < 250 ? 'text-yellow-400' : 'text-red-400'}`}>
-                    {latencyMs < 100 ? 'Excellent' : latencyMs < 250 ? 'Good' : 'Slow'}
-                  </span>
+                  <span className={`text-[10px] font-semibold ${latencyMs < 100 ? "text-green-400" : latencyMs < 250 ? "text-yellow-400" : "text-red-400"}`}>{latencyMs < 100 ? "Excellent" : latencyMs < 250 ? "Good" : "Slow"}</span>
                 </div>
               )}
 
@@ -608,7 +631,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   <div className="text-right">
                     <p className="text-[11px] font-mono font-semibold text-telegram-text">
                       <span className="text-emerald-400">↑ {formatBytes(bandwidth.up_bytes)}</span>
-                      {' · '}
+                      {" · "}
                       <span className="text-blue-400">↓ {formatBytes(bandwidth.down_bytes)}</span>
                     </p>
                   </div>
@@ -630,10 +653,10 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   <p className="text-[10px] text-telegram-subtext">Route traffic through a proxy server</p>
                 </div>
                 <button
-                  onClick={() => updateSetting('proxyEnabled', !settings.proxyEnabled)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${settings.proxyEnabled ? 'bg-telegram-primary' : 'bg-telegram-border'}`}
+                  onClick={() => updateSetting("proxyEnabled", !settings.proxyEnabled)}
+                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 flex-shrink-0 ${settings.proxyEnabled ? "bg-telegram-primary" : "bg-telegram-border"}`}
                 >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${settings.proxyEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${settings.proxyEnabled ? "translate-x-5" : "translate-x-0"}`} />
                 </button>
               </div>
 
@@ -646,7 +669,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                 <div className="relative">
                   <select
                     value={settings.proxyType}
-                    onChange={e => updateSetting('proxyType', e.target.value as 'socks5')}
+                    onChange={(e) => updateSetting("proxyType", e.target.value as "socks5")}
                     className="appearance-none bg-telegram-bg border border-telegram-border rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-telegram-text focus:outline-none focus:border-telegram-primary/50 transition cursor-pointer"
                   >
                     <option value="socks5">SOCKS5</option>
@@ -665,7 +688,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   type="text"
                   placeholder="127.0.0.1"
                   value={settings.proxyHost}
-                  onChange={e => updateSetting('proxyHost', e.target.value)}
+                  onChange={(e) => updateSetting("proxyHost", e.target.value)}
                   className="w-32 bg-telegram-bg border border-telegram-border rounded-lg px-2 py-1.5 text-xs text-telegram-text text-right focus:outline-none focus:border-telegram-primary/50 transition placeholder:text-telegram-subtext/40"
                 />
               </div>
@@ -681,13 +704,13 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   min="1"
                   max="65535"
                   value={settings.proxyPort}
-                  onChange={e => updateSetting('proxyPort', Math.max(1, Math.min(65535, parseInt(e.target.value) || 1080)))}
+                  onChange={(e) => updateSetting("proxyPort", Math.max(1, Math.min(65535, parseInt(e.target.value) || 1080)))}
                   className="w-20 bg-telegram-bg border border-telegram-border rounded-lg px-2 py-1.5 text-xs text-telegram-text text-center focus:outline-none focus:border-telegram-primary/50 transition"
                 />
               </div>
 
               {/* SOCKS5 auth fields */}
-              {settings.proxyType === 'socks5' && (
+              {settings.proxyType === "socks5" && (
                 <>
                   <div className="flex items-center justify-between py-2 border-b border-telegram-border/20">
                     <div>
@@ -698,7 +721,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                       type="text"
                       placeholder="Optional"
                       value={settings.proxyUsername}
-                      onChange={e => updateSetting('proxyUsername', e.target.value)}
+                      onChange={(e) => updateSetting("proxyUsername", e.target.value)}
                       className="w-32 bg-telegram-bg border border-telegram-border rounded-lg px-2 py-1.5 text-xs text-telegram-text text-right focus:outline-none focus:border-telegram-primary/50 transition placeholder:text-telegram-subtext/40"
                     />
                   </div>
@@ -711,7 +734,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                       type="password"
                       placeholder="Optional"
                       value={settings.proxyPassword}
-                      onChange={e => updateSetting('proxyPassword', e.target.value)}
+                      onChange={(e) => updateSetting("proxyPassword", e.target.value)}
                       className="w-32 bg-telegram-bg border border-telegram-border rounded-lg px-2 py-1.5 text-xs text-telegram-text text-right focus:outline-none focus:border-telegram-primary/50 transition placeholder:text-telegram-subtext/40"
                     />
                   </div>
@@ -720,9 +743,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
 
               {/* Info note */}
               <div className="p-2.5 rounded-lg bg-yellow-500/5 border border-yellow-500/10">
-                <p className="text-[10px] text-yellow-400/70 leading-relaxed">
-                  ⚠️ Proxy changes require reconnecting.
-                </p>
+                <p className="text-[10px] text-yellow-400/70 leading-relaxed">⚠️ Proxy changes require reconnecting.</p>
               </div>
             </div>
 
@@ -737,10 +758,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   {cachedFiles.map((entry) => {
                     const isUploading = uploadingCacheFiles.has(entry.cached_path);
                     return (
-                      <div
-                        key={entry.cached_path}
-                        className="flex items-center justify-between p-3 rounded-xl bg-telegram-bg/50 border border-telegram-border/30"
-                      >
+                      <div key={entry.cached_path} className="flex items-center justify-between p-3 rounded-xl bg-telegram-bg/50 border border-telegram-border/30">
                         <div className="min-w-0 flex-1 mr-2">
                           <p className="text-xs font-semibold text-telegram-text truncate">{entry.file_name}</p>
                           <p className="text-[10px] text-telegram-subtext/60 font-mono">{formatBytes(entry.file_size)}</p>
@@ -766,10 +784,7 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                     );
                   })}
                 </div>
-                <button
-                  onClick={handleClearCachedFiles}
-                  className="w-full text-center text-[10px] text-red-400/60 hover:text-red-400 transition-colors py-1"
-                >
+                <button onClick={handleClearCachedFiles} className="w-full text-center text-[10px] text-red-400/60 hover:text-red-400 transition-colors py-1">
                   Clear all shared files
                 </button>
               </div>
@@ -778,9 +793,9 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
             <div className="p-4 rounded-2xl bg-telegram-hover/20 border border-telegram-border/30 space-y-4">
               <h3 className="text-sm font-bold text-telegram-primary tracking-wide uppercase text-[10px]">About</h3>
               <div className="flex flex-col items-center py-3 space-y-4">
-                <img src="/logo.svg" className="w-14 h-14 drop-shadow-lg" alt="Telegram Drive Logo" />
+                <img src="/logo.svg" className="w-14 h-14 drop-shadow-lg" alt="Cicem Drive Logo" />
                 <div className="text-center">
-                  <p className="text-sm font-bold text-telegram-text">Telegram Drive</p>
+                  <p className="text-sm font-bold text-telegram-text">Cicem Drive</p>
                   <p className="text-[11px] text-telegram-subtext mt-0.5">v{appVersion}</p>
                 </div>
 
@@ -790,7 +805,10 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   <p className="text-xs font-semibold text-telegram-text">Cameron Amer</p>
 
                   <button
-                    onClick={(e) => { e.preventDefault(); openUrl('https://www.cameronamer.com'); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openUrl("https://www.cameronamer.com");
+                    }}
                     className="flex items-center justify-center gap-1.5 text-[11px] text-telegram-primary hover:text-telegram-primary/80 transition-colors cursor-pointer"
                   >
                     <Globe className="w-3 h-3" />
@@ -798,24 +816,27 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                   </button>
 
                   <button
-                    onClick={(e) => { e.preventDefault(); openUrl('https://github.com/caamer20/telegram-drive'); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openUrl("https://github.com/caamer20/telegram-drive");
+                    }}
                     className="flex items-center justify-center gap-1.5 text-[11px] text-telegram-primary hover:text-telegram-primary/80 transition-colors cursor-pointer"
                   >
                     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
                     </svg>
                     github.com/caamer20/telegram-drive
                   </button>
                 </div>
 
-                <p className="text-[10px] text-telegram-subtext/60 leading-relaxed text-center px-2">
-                  Turn your Telegram account into unlimited, secure cloud storage.
-                  Open-source and free forever.
-                </p>
+                <p className="text-[10px] text-telegram-subtext/60 leading-relaxed text-center px-2">Turn your Telegram account into unlimited, secure cloud storage. Open-source and free forever.</p>
               </div>
             </div>
 
-            <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-semibold text-xs active:scale-98 transition-all duration-200">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-semibold text-xs active:scale-98 transition-all duration-200"
+            >
               <LogOut className="w-4 h-4" />
               Log Out
             </button>
@@ -824,28 +845,21 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
       </main>
 
       {/* Slide-out Sidebar Drawer Overlay */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 z-[100] backdrop-blur-sm transition-opacity duration-300"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/60 z-[100] backdrop-blur-sm transition-opacity duration-300" onClick={() => setIsSidebarOpen(false)} />}
 
       {/* Slide-out Sidebar Drawer Panel */}
       <div
-        className={`fixed top-0 left-0 bottom-0 w-[280px] bg-telegram-surface border-r border-telegram-border/60 z-[110] shadow-2xl flex flex-col pt-[calc(1rem+env(safe-area-inset-top,24px))] pb-28 transition-transform duration-300 ease-out transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
-        onClick={e => e.stopPropagation()}
+        className={`fixed top-0 left-0 bottom-0 w-[280px] bg-telegram-surface border-r border-telegram-border/60 z-[110] shadow-2xl flex flex-col pt-[calc(1rem+env(safe-area-inset-top,24px))] pb-28 transition-transform duration-300 ease-out transform ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 flex items-center justify-between border-b border-telegram-border/30">
           <div className="flex items-center gap-2">
             <img src="/logo.svg" className="w-8 h-8 drop-shadow-lg" alt="Logo" />
-            <span className="font-bold text-base text-telegram-text tracking-tight">Telegram Drive</span>
+            <span className="font-bold text-base text-telegram-text tracking-tight">Cicem Drive</span>
           </div>
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-1 rounded-lg bg-telegram-hover/30 hover:bg-telegram-hover/60 text-telegram-subtext text-xs"
-          >
+          <button onClick={() => setIsSidebarOpen(false)} className="p-1 rounded-lg bg-telegram-hover/30 hover:bg-telegram-hover/60 text-telegram-subtext text-xs">
             ✕
           </button>
         </div>
@@ -857,49 +871,42 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
               setActiveFolderId(null);
               setIsSidebarOpen(false);
             }}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 ${activeFolderId === null
-                ? 'bg-telegram-primary/15 text-telegram-primary border border-telegram-primary/15'
-                : 'text-telegram-subtext hover:bg-telegram-hover/40 hover:text-telegram-text border border-transparent'
-              }`}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
+              activeFolderId === null ? "bg-telegram-primary/15 text-telegram-primary border border-telegram-primary/15" : "text-telegram-subtext hover:bg-telegram-hover/40 hover:text-telegram-text border border-transparent"
+            }`}
           >
             <span>Saved Messages</span>
           </button>
 
-          {folders.map(folder => {
+          {folders.map((folder) => {
             const isPublic = folder.is_public || !!folder.username;
             return (
-            <div key={folder.id} className="flex items-center gap-1">
-              <button
-                onClick={() => {
-                  setActiveFolderId(folder.id);
-                  setIsSidebarOpen(false);
-                }}
-                className={`flex-1 text-left px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                  activeFolderId === folder.id
-                    ? 'bg-telegram-primary/15 text-telegram-primary border border-telegram-primary/15'
-                    : 'text-telegram-subtext hover:bg-telegram-hover/40 hover:text-telegram-text border border-transparent'
-                }`}
-              >
-                <span className="flex items-center gap-1.5 max-w-[150px]">
-                  <span className="truncate">{folder.name}</span>
-                  {isPublic ? (
-                    <Globe className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                  ) : (
-                    <Lock className="w-3 h-3 text-amber-400/60 flex-shrink-0" />
-                  )}
-                </span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFolderActionMenu(folder);
-                }}
-                className="flex-shrink-0 p-2 rounded-xl hover:bg-telegram-hover/40 active:bg-telegram-hover/60 text-telegram-subtext/60 hover:text-telegram-subtext transition-all duration-200"
-                aria-label="Folder actions"
-              >
-                <MoreVertical className="w-3.5 h-3.5" />
-              </button>
-            </div>
+              <div key={folder.id} className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setActiveFolderId(folder.id);
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`flex-1 text-left px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
+                    activeFolderId === folder.id ? "bg-telegram-primary/15 text-telegram-primary border border-telegram-primary/15" : "text-telegram-subtext hover:bg-telegram-hover/40 hover:text-telegram-text border border-transparent"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 max-w-[150px]">
+                    <span className="truncate">{folder.name}</span>
+                    {isPublic ? <Globe className="w-3 h-3 text-emerald-400 flex-shrink-0" /> : <Lock className="w-3 h-3 text-amber-400/60 flex-shrink-0" />}
+                  </span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFolderActionMenu(folder);
+                  }}
+                  className="flex-shrink-0 p-2 rounded-xl hover:bg-telegram-hover/40 active:bg-telegram-hover/60 text-telegram-subtext/60 hover:text-telegram-subtext transition-all duration-200"
+                  aria-label="Folder actions"
+                >
+                  <MoreVertical className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })}
         </nav>
@@ -918,30 +925,17 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
             + Create Folder
           </button>
           <div className="flex items-center gap-2 text-telegram-subtext text-[10px] font-semibold uppercase tracking-wider">
-            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-            <span>{isConnected ? 'Connected' : 'Offline'}</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"}`} />
+            <span>{isConnected ? "Connected" : "Offline"}</span>
           </div>
         </div>
       </div>
 
       {/* Folder action popover (replaces swipe-to-reveal) */}
-      {folderActionMenu && (
-        <ActionPopover
-          title={folderActionMenu.name}
-          actions={buildFolderActions(folderActionMenu)}
-          onClose={() => setFolderActionMenu(null)}
-        />
-      )}
+      {folderActionMenu && <ActionPopover title={folderActionMenu.name} actions={buildFolderActions(folderActionMenu)} onClose={() => setFolderActionMenu(null)} />}
 
       {/* Rename folder bottom sheet */}
-      {renameFolder && (
-        <RenameFolderSheet
-          folderId={renameFolder.id}
-          currentName={renameFolder.name}
-          onRename={handleFolderRename}
-          onClose={() => setRenameFolder(null)}
-        />
-      )}
+      {renameFolder && <RenameFolderSheet folderId={renameFolder.id} currentName={renameFolder.name} onRename={handleFolderRename} onClose={() => setRenameFolder(null)} />}
 
       {/* Floating Bottom Nav Bar */}
       <BottomNavBar activeTab={activeTab} setActiveTab={setActiveTab} isAndroid={isAndroid} />
@@ -955,47 +949,22 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
       {/* Previews Overlays (Media, PDF & Images) */}
       {playingFile && (
         <div className="fixed inset-0 z-[100] bg-black/90">
-          <MediaPlayer
-            file={playingFile}
-            onClose={() => setPlayingFile(null)}
-            activeFolderId={activeFolderId}
-          />
+          <MediaPlayer file={playingFile} onClose={() => setPlayingFile(null)} activeFolderId={activeFolderId} />
         </div>
       )}
       {pdfFile && (
         <div className="fixed inset-0 z-[100] bg-telegram-bg">
-          <PdfViewer
-            file={pdfFile}
-            onClose={() => setPdfFile(null)}
-            activeFolderId={activeFolderId}
-          />
+          <PdfViewer file={pdfFile} onClose={() => setPdfFile(null)} activeFolderId={activeFolderId} />
         </div>
       )}
-      {previewFile && (
-        <PreviewModal
-          file={previewFile}
-          activeFolderId={activeFolderId}
-          onClose={() => setPreviewFile(null)}
-        />
-      )}
+      {previewFile && <PreviewModal file={previewFile} activeFolderId={activeFolderId} onClose={() => setPreviewFile(null)} />}
 
-      {shareFile && (
-        <ShareDialog
-          file={shareFile}
-          onClose={() => setShareFile(null)}
-        />
-      )}
+      {shareFile && <ShareDialog file={shareFile} onClose={() => setShareFile(null)} />}
 
       {/* Bulk Share Results Modal */}
       {bulkShareLinks && (
-        <div
-          className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => setBulkShareLinks(null)}
-        >
-          <div
-            className="w-full max-w-lg bg-[#1c1c1e] border border-white/10 rounded-t-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[70vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setBulkShareLinks(null)}>
+          <div className="w-full max-w-lg bg-[#1c1c1e] border border-white/10 rounded-t-3xl p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[70vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             {/* Drag handle */}
             <div className="flex justify-center mb-4">
               <div className="w-10 h-1 rounded-full bg-white/20" />
@@ -1004,12 +973,9 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Link className="w-4 h-4 text-telegram-primary" />
-                {bulkShareLinks.length} Share Link{bulkShareLinks.length !== 1 ? 's' : ''}
+                {bulkShareLinks.length} Share Link{bulkShareLinks.length !== 1 ? "s" : ""}
               </h3>
-              <button
-                onClick={() => setBulkShareLinks(null)}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-telegram-subtext"
-              >
+              <button onClick={() => setBulkShareLinks(null)} className="p-1.5 rounded-lg hover:bg-white/10 text-telegram-subtext">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1024,29 +990,19 @@ export default function MobileDashboard({ onLogout }: { onLogout?: () => void })
                 {bulkShareLinks.map(({ file, link }) => {
                   const isCopied = bulkShareCopied.has(link);
                   return (
-                    <div
-                      key={file.id}
-                      className="p-3 rounded-xl bg-white/5 border border-white/5 space-y-2"
-                    >
+                    <div key={file.id} className="p-3 rounded-xl bg-white/5 border border-white/5 space-y-2">
                       <p className="text-xs font-semibold text-white truncate">{file.name}</p>
                       <div className="flex gap-2">
-                        <input
-                          type="text"
-                          readOnly
-                          value={link}
-                          className="flex-1 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-telegram-subtext focus:outline-none select-all truncate"
-                        />
+                        <input type="text" readOnly value={link} className="flex-1 bg-black/30 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-telegram-subtext focus:outline-none select-all truncate" />
                         <button
                           onClick={() => handleCopyBulkLink(link)}
                           className={`px-2.5 py-1.5 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
-                            isCopied
-                              ? 'bg-emerald-500 border-emerald-500 text-white'
-                              : 'bg-white/10 border border-white/10 text-telegram-subtext hover:bg-white/20'
+                            isCopied ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white/10 border border-white/10 text-telegram-subtext hover:bg-white/20"
                           }`}
                         >
                           {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                         </button>
-                        {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                        {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
                           <button
                             onClick={() => handleNativeShareBulkLink(file, link)}
                             className="px-2.5 py-1.5 rounded-lg bg-telegram-primary/20 hover:bg-telegram-primary/30 text-telegram-primary border border-telegram-primary/30 transition-all flex items-center justify-center flex-shrink-0"

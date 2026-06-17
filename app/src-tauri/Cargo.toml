@@ -61,6 +61,11 @@ mp4parse = "0.17"
 urlencoding = "2"
 reqwest = { version = "0.12", features = ["stream", "rustls-tls", "socks"] }
 sysinfo = "0.30"
+hex = "0.4"
+sha1 = "0.10"
+zbase32 = "0.1.2"
+
+sequoia-openpgp = { version = "2.3.0", default-features = false, features = ["crypto-rust", "allow-experimental-crypto", "allow-variable-time-crypto"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

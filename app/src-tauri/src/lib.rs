@@ -373,7 +373,7 @@ fn cmd_get_system_diagnostics(
 ) -> Result<String, String> {
     let mut lines: Vec<String> = Vec::new();
 
-    lines.push("=== Telegram Drive Diagnostics ===".into());
+    lines.push("=== Cicem Drive Diagnostics ===".into());
     lines.push(format!("Package: {}", env!("CARGO_PKG_NAME")));
     lines.push(format!("Version: {}", env!("CARGO_PKG_VERSION")));
 
@@ -720,6 +720,18 @@ pub fn run() {
             fmp4_remux::cmd_get_fmp4_status,
             commands::cmd_list_archive_contents,
             commands::cmd_extract_archive_entry,
+            commands::gpg::cmd_list_gpg_keys,
+            commands::gpg::cmd_import_gpg_key,
+            commands::gpg::cmd_fetch_gpg_key_from_url,
+            commands::gpg::cmd_gpg_encrypt_file,
+            commands::gpg::cmd_generate_keypair,
+            commands::gpg::cmd_import_private_key,
+            commands::gpg::cmd_gpg_decrypt_file,
+            commands::gpg::cmd_gpg_decrypt_file_with_passphrase,
+            commands::gpg::cmd_read_file_to_string,
+            commands::gpg::cmd_gpg_encrypt_file_symmetric,
+            commands::gpg::cmd_delete_temp_file,
+            commands::gpg::cmd_fetch_wkd_key_by_email,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

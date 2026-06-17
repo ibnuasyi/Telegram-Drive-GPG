@@ -1,4 +1,4 @@
-# Telegram Drive — Full Repository Analysis
+# Cicem Drive — Full Repository Analysis
 
 **Date:** June 1, 2026  
 **Version:** 1.7.9 (frontend) / 1.7.0 (Cargo.toml — MISMATCH)  
@@ -51,17 +51,17 @@
 
 ## 2. Version Mismatches & Outdated Dependencies
 
-| Issue | Location | Details |
-|-------|----------|---------|
-| Cargo.toml version `1.7.0` vs tauri.conf.json `1.7.9` | `src-tauri/Cargo.toml` | Must be kept in sync |
-| `grammers` pinned to specific git rev `d07f96f` | `src-tauri/Cargo.toml` | Git dependency with no semver — fragile if repo changes |
-| `base64 = "0.21"` | `src-tauri/Cargo.toml` | v0.22 is current; 0.21 is deprecated |
-| `rand = "0.8"` | `src-tauri/Cargo.toml` | v0.9 is current |
-| `tauri-plugin-dialog = "2.6.0"` pinned | `src-tauri/Cargo.toml` | Other tauri plugins use `"2"` (unpinned) — inconsistent |
-| `tauri-plugin-updater = "2.9.0"` pinned | `src-tauri/Cargo.toml` | Same inconsistency |
-| `tauri-plugin-process = "2.3.1"` pinned | `src-tauri/Cargo.toml` | Same inconsistency |
-| `mp4parse = "0.17"` | `src-tauri/Cargo.toml` | v0.17 is current but check for updates |
-| `ndk-context = "0.1.1"` | `src-tauri/Cargo.toml` | Very old, check for newer versions |
+| Issue                                                 | Location               | Details                                                 |
+| ----------------------------------------------------- | ---------------------- | ------------------------------------------------------- |
+| Cargo.toml version `1.7.0` vs tauri.conf.json `1.7.9` | `src-tauri/Cargo.toml` | Must be kept in sync                                    |
+| `grammers` pinned to specific git rev `d07f96f`       | `src-tauri/Cargo.toml` | Git dependency with no semver — fragile if repo changes |
+| `base64 = "0.21"`                                     | `src-tauri/Cargo.toml` | v0.22 is current; 0.21 is deprecated                    |
+| `rand = "0.8"`                                        | `src-tauri/Cargo.toml` | v0.9 is current                                         |
+| `tauri-plugin-dialog = "2.6.0"` pinned                | `src-tauri/Cargo.toml` | Other tauri plugins use `"2"` (unpinned) — inconsistent |
+| `tauri-plugin-updater = "2.9.0"` pinned               | `src-tauri/Cargo.toml` | Same inconsistency                                      |
+| `tauri-plugin-process = "2.3.1"` pinned               | `src-tauri/Cargo.toml` | Same inconsistency                                      |
+| `mp4parse = "0.17"`                                   | `src-tauri/Cargo.toml` | v0.17 is current but check for updates                  |
+| `ndk-context = "0.1.1"`                               | `src-tauri/Cargo.toml` | Very old, check for newer versions                      |
 
 ---
 
@@ -114,14 +114,6 @@
 
 ---
 
-
-
-
-
-
-
-
-
 ## 4. Security Concerns
 
 ### 4.1 SHA-256 Password Hashing Without Proper KDF
@@ -156,20 +148,12 @@
 
 ---
 
-
-
-
-
-
-
-
-
-
 ## 5. Code Duplication
 
 ### 5.1 Download/Stream Chunk Logic — Duplicated 3 Times
 
 The exact same byte-range download with chunk alignment, skip logic, and content-length limiting is duplicated in:
+
 1. `src-tauri/src/server.rs` — `stream_media`
 2. `src-tauri/src/api_routes.rs` — `api_download_file`
 3. `src-tauri/src/share_routes.rs` — `get_shared_file`
@@ -179,6 +163,7 @@ Each copy has ~60 lines of identical download iteration logic with the same `CHU
 ### 5.2 MP4 Box Parsing — Duplicated Between `transcode.rs` and `video_metadata.rs`
 
 Both files contain nearly identical implementations of:
+
 - `read_u32_be`
 - `find_box` / `find_box_in_range`
 - `box_size_at`
@@ -188,6 +173,7 @@ Both files contain nearly identical implementations of:
 ### 5.3 Password Hashing — Duplicated
 
 `hash_password` function is implemented identically in both:
+
 - `src-tauri/src/share_routes.rs`
 - `src-tauri/src/commands/sharing.rs`
 
@@ -199,13 +185,6 @@ Both files contain nearly identical implementations of:
 ### 5.5 Rate Limit Header Injection — Duplicated 3 Times
 
 The same 3-line rate limit header insertion block is copy-pasted in `api_list_files`, `api_bulk_files`, and `api_search_files` in `api_routes.rs`.
-
-
-
-
-
-
-
 
 ---
 
@@ -256,22 +235,6 @@ The same 3-line rate limit header insertion block is copy-pasted in `api_list_fi
 - **File:** `src/context/SettingsContext.tsx`
 - **Impact:** `maxConcurrentDownloads: 6` is defined in settings but downloads also process one at a time.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ---
 
 ## 7. Architecture & Design Issues
@@ -309,21 +272,10 @@ The same 3-line rate limit header insertion block is copy-pasted in `api_list_fi
 
 ---
 
-
-
-
-
-
-
-
-
-
-
-
-
 ### 8.1 Console.log Statements Left in Production Code
 
 Multiple `console.log` and `console.warn` statements remain throughout:
+
 - `src/hooks/useAdaptiveStreaming.ts` — extensive debug logging with emoji prefixes
 - `src/hooks/useTelegramConnection.ts` — `[AutoSync]` logs
 - `src/hooks/useFileUpload.ts` — `[Upload]` logs
@@ -355,19 +307,6 @@ Multiple `console.log` and `console.warn` statements remain throughout:
 - **Impact:** `.performance-mode *` selector with `!important` overrides every element. This is heavy-handed and could cause unexpected style breakage.
 
 ---
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## 9. Backend (Rust) Specific Issues
 
@@ -498,4 +437,4 @@ Multiple `console.log` and `console.warn` statements remain throughout:
 
 ---
 
-*Analysis generated by MimoPro — covers all Rust backend files (18 source files), all TypeScript/React frontend files (40+ source files), configuration files, and project structure.*
+_Analysis generated by MimoPro — covers all Rust backend files (18 source files), all TypeScript/React frontend files (40+ source files), configuration files, and project structure._

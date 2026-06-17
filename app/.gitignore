@@ -23,6 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 .npm-cache
+src-tauri/target/
+.env
+.env.local
 
 # Android local builds
 /src-tauri/gen/

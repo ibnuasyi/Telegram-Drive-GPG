@@ -10,7 +10,7 @@ import { useUpdateCheck } from "./hooks/useUpdateCheck";
 import { usePlatform } from "./hooks/usePlatform";
 import "./App.css";
 
-const DesktopDashboard = React.lazy(() => import("./components/desktop/DesktopDashboard").then(m => ({ default: m.Dashboard })));
+const DesktopDashboard = React.lazy(() => import("./components/desktop/DesktopDashboard").then((m) => ({ default: m.Dashboard })));
 // Vite requires a fully static import path for dynamic imports so it can
 // perform static analysis and code-splitting. Template literals with
 // variables prevent Vite from resolving the module at build time.
@@ -35,26 +35,26 @@ function AppContent() {
 
   // Performance mode: auto-enable when user has prefers-reduced-motion
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (mediaQuery.matches && !settings.performanceMode) {
-      updateSetting('performanceMode', true);
+      updateSetting("performanceMode", true);
     }
     const handler = (e: MediaQueryListEvent) => {
       if (e.matches && !settings.performanceMode) {
-        updateSetting('performanceMode', true);
+        updateSetting("performanceMode", true);
       }
     };
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
   // Apply performance-mode class to body (guarded by settings load to avoid flicker)
   useEffect(() => {
     if (!isLoaded) return;
     if (settings.performanceMode) {
-      document.body.classList.add('performance-mode');
+      document.body.classList.add("performance-mode");
     } else {
-      document.body.classList.remove('performance-mode');
+      document.body.classList.remove("performance-mode");
     }
   }, [settings.performanceMode, isLoaded]);
 
@@ -158,7 +158,7 @@ function AppContent() {
     return (
       <main className="h-screen w-screen flex items-center justify-center bg-telegram-bg">
         <div className="flex flex-col items-center gap-4">
-          <img src="/logo.svg" className="w-16 h-16 drop-shadow-lg animate-pulse" alt="Telegram Drive" />
+          <img src="/logo.svg" className="w-16 h-16 drop-shadow-lg animate-pulse" alt="Cicem Drive" />
           <p className="text-sm text-telegram-subtext tracking-wide">Restoring session...</p>
         </div>
       </main>
@@ -167,24 +167,17 @@ function AppContent() {
 
   return (
     <main className="absolute inset-0 text-telegram-text overflow-hidden selection:bg-telegram-primary/30">
-      <UpdateBanner
-        available={available}
-        version={version}
-        downloading={downloading}
-        progress={progress}
-        onUpdate={downloadAndInstall}
-        onDismiss={dismissUpdate}
-      />
+      <UpdateBanner available={available} version={version} downloading={downloading} progress={progress} onUpdate={downloadAndInstall} onDismiss={dismissUpdate} />
       <Toaster theme={theme} position="bottom-center" />
-      {authStatus === "ad-gateway" && (
-        <AdGateway onContinue={() => setAuthStatus("authenticated")} />
-      )}
+      {authStatus === "ad-gateway" && <AdGateway onContinue={() => setAuthStatus("authenticated")} />}
       {authStatus === "authenticated" && (
-        <Suspense fallback={
-          <div className="h-screen w-screen flex flex-col items-center justify-center bg-telegram-bg">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-telegram-primary"></div>
-          </div>
-        }>
+        <Suspense
+          fallback={
+            <div className="h-screen w-screen flex flex-col items-center justify-center bg-telegram-bg">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-telegram-primary"></div>
+            </div>
+          }
+        >
           {isMobile ? (
             <ErrorBoundary>
               <MobileDashboard onLogout={() => setAuthStatus("unauthenticated")} />
@@ -196,13 +189,10 @@ function AppContent() {
           )}
         </Suspense>
       )}
-      {authStatus === "unauthenticated" && (
-        <AuthWizard onLogin={() => setAuthStatus("ad-gateway")} />
-      )}
+      {authStatus === "unauthenticated" && <AuthWizard onLogin={() => setAuthStatus("ad-gateway")} />}
     </main>
   );
 }
-
 
 function App() {
   return (

@@ -1,9 +1,7 @@
 {
   "identifier": "default",
-  "description": "Standard permissions for Telegram Drive",
-  "windows": [
-    "main"
-  ],
+  "description": "Standard permissions for Cicem Drive",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "os:default",

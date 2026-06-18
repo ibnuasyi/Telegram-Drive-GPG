@@ -18,8 +18,8 @@ jobs:
 
       - name: Set version
         id: get_version
-        # Memaksa versi rilis menjadi 0.9.1
-        run: echo "VERSION=0.9.1" >> $GITHUB_OUTPUT
+        # Sekarang GitHub akan otomatis membaca versi dari package.json Anda!
+        run: echo "VERSION=$(node -e "console.log(JSON.parse(require('fs').readFileSync('package.json')).version)")" >> $GITHUB_OUTPUT
 
       - name: Extract changelog for this version
         id: changelog

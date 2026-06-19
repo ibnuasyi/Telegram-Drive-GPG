@@ -5,7 +5,7 @@ import { execSync } from "child_process";
 const newVersion = process.argv[2];
 if (!newVersion) {
   console.error("❌ Gagal: Anda lupa memasukkan versi baru!");
-  console.log("💡 Cara pakai: node release.js 0.9.2");
+  console.log("💡 Cara pakai: node release.js 0.9.3");
   process.exit(1);
 }
 
@@ -33,14 +33,19 @@ try {
   fs.writeFileSync(cargoPath, cargo);
   console.log("✅ Cargo.toml berhasil diperbarui.");
 
-  // 5. Otomatis Git Add, Commit, dan Push
+  // 5. Otomatis Git Add, Commit, dan Push Kode
   console.log("📦 Mengirim ke GitHub...");
   execSync("git add .", { stdio: "inherit" });
   execSync(`git commit -m "chore: Rilis Cicem Drive v${newVersion}"`, { stdio: "inherit" });
   execSync("git push origin main", { stdio: "inherit" });
 
-  console.log(`🎉 SUKSES! Kode v${newVersion} telah dikirim ke GitHub.`);
-  console.log(`👉 Sekarang buka tab 'Actions' di GitHub dan klik 'Run workflow' untuk mulai merakit aplikasinya!`);
+  // 6. TAMBAHAN: Otomatis Membuat dan Mengirim Git Tag
+  console.log(`🏷️ Membuat Git Tag v${newVersion}...`);
+  execSync(`git tag v${newVersion}`, { stdio: "inherit" });
+  execSync(`git push origin v${newVersion}`, { stdio: "inherit" });
+
+  console.log(`🎉 SUKSES! Kode dan Tag v${newVersion} telah dikirim ke GitHub.`);
+  console.log(`👉 Github Actions akan otomatis mendeteksi tag v${newVersion} dan merakit aplikasinya dengan nama yang benar!`);
 } catch (error) {
   console.error("❌ Terjadi kesalahan:", error.message);
 }

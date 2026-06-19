@@ -4,7 +4,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { QueueItem } from "../types";
+// Kita import QueueItem asli, lalu kita perluas (extend) untuk kebutuhan yt-dlp
+import { QueueItem as CoreQueueItem } from "../types";
 import { isAndroidPlatform, showFileDialogFallback, pickWithFallback } from "../utils";
 import { useSettings } from "../context/SettingsContext";
 import type { Store } from "@tauri-apps/plugin-store";
@@ -14,6 +15,13 @@ export interface EncryptionConfig {
   passphrase?: string;
   fingerprints?: string[];
 }
+
+// Perluasan tipe data untuk menampung properti tambahan kita
+export type QueueItem = CoreQueueItem & {
+  isVideoExtract?: boolean;
+  encryptionConfig?: EncryptionConfig;
+  tempZipPath?: string;
+};
 
 interface ProgressPayload {
   id: string;
@@ -97,7 +105,6 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
     }
   }, [uploadQueue, settings.maxConcurrentUploads]);
 
-  // Efek untuk Service Android yang sebelumnya tidak sengaja saya hilangkan
   useEffect(() => {
     if (!isAndroidPlatform) return;
     const hasActiveUploads = uploadQueue.some((i) => i.status === "uploading" || i.status === "pending");
@@ -119,29 +126,56 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
   const processItem = async (item: QueueItem) => {
     activeCountRef.current++;
     let filePathToUpload = item.path;
-    const initialStatus = item.url ? "downloading" : "uploading";
+
+    // Jika isVideoExtract true, ini akan berubah menjadi upload file LOKAL
+    let isRemoteUrlUpload = !!item.url && !item.isVideoExtract;
+
+    const initialStatus = isRemoteUrlUpload ? "downloading" : "uploading";
     setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: initialStatus, progress: 0 } : i)));
 
+    // ARRAY TRACKER: Melacak file sementara yang harus dihapus (Zero-Trust)
+    const tempFilesToClean: string[] = [];
+
     try {
-      // --- ROUTER ENKRIPSI ---
-      if (item.encryptionConfig && item.encryptionConfig.type !== "none" && !item.url) {
+      // --- FASE 1: YT-DLP EXTRACTION ---
+      if (item.isVideoExtract && item.url) {
+        setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "downloading", progress: 0 } : i)));
+
+        // Memanggil Rust untuk mengunduh video ke folder /temp
+        filePathToUpload = await invoke<string>("cmd_ytdlp_download", { url: item.url });
+
+        // Tandai file MP4 ini untuk dihapus nanti
+        tempFilesToClean.push(filePathToUpload);
+
+        setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "uploading", progress: 0 } : i)));
+      }
+
+      // --- FASE 2: ROUTER ENKRIPSI ---
+      if (item.encryptionConfig && item.encryptionConfig.type !== "none" && !isRemoteUrlUpload) {
         setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "uploading" as const } : i)));
 
+        let encryptedPath = "";
         if (item.encryptionConfig.type === "passphrase" && item.encryptionConfig.passphrase) {
-          filePathToUpload = await invoke<string>("cmd_gpg_encrypt_file_symmetric", {
-            inputPath: item.path,
+          encryptedPath = await invoke<string>("cmd_gpg_encrypt_file_symmetric", {
+            inputPath: filePathToUpload,
             passphrase: item.encryptionConfig.passphrase,
           });
         } else if (item.encryptionConfig.type === "public_key" && item.encryptionConfig.fingerprints) {
-          filePathToUpload = await invoke<string>("cmd_gpg_encrypt_file", {
-            inputPath: item.path,
+          encryptedPath = await invoke<string>("cmd_gpg_encrypt_file", {
+            inputPath: filePathToUpload,
             fingerprints: item.encryptionConfig.fingerprints,
           });
         }
-      }
-      // --- AKHIR ROUTER ---
 
-      if (item.url) {
+        if (encryptedPath) {
+          filePathToUpload = encryptedPath;
+          // Tandai file .gpg ini untuk dihapus nanti
+          tempFilesToClean.push(encryptedPath);
+        }
+      }
+
+      // --- FASE 3: UPLOAD KE TELEGRAM ---
+      if (isRemoteUrlUpload) {
         await invoke("cmd_upload_from_url", { url: item.url, folderId: item.folderId, transferId: item.id });
       } else {
         await invoke("cmd_upload_file", { path: filePathToUpload, folderId: item.folderId, transferId: item.id });
@@ -164,8 +198,13 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
         cancelledRef.current.delete(item.id);
       }
     } finally {
-      if (filePathToUpload !== item.path) {
-        await invoke("cmd_delete_temp_file", { path: filePathToUpload }).catch(() => {});
+      // --- FASE 4: SANITASI (SELF-DESTRUCT) ---
+      // Menghapus semua file residu yang tercipta selama proses
+      for (const file of tempFilesToClean) {
+        // Jangan hapus file asli pengguna jika itu upload lokal biasa
+        if (file !== item.path) {
+          await invoke("cmd_delete_temp_file", { path: file }).catch(() => {});
+        }
       }
       await cleanupTempZip(item);
       activeCountRef.current--;
@@ -243,22 +282,41 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
     }
   };
 
-  const handleUrlUpload = (url: string, folderId: number | null, encConfig?: EncryptionConfig) => {
+  const handleUrlUpload = (url: string, folderId: number | null, encryptOrConfig?: boolean | EncryptionConfig, isVideo: boolean = false) => {
     if (!url || !url.trim()) return;
     let filename = url.split("/").pop() || "remote_file";
+    if (isVideo) filename = "Memproses_Video..."; // Placeholder nama, Rust/Telegram akan menggantinya
+
+    let encConfig: EncryptionConfig = { type: "none" };
+
+    // Jika pengguna mencentang "Encrypt" di modal Remote URL
+    if (typeof encryptOrConfig === "boolean" && encryptOrConfig) {
+      // Kita gunakan prompt bawaan browser/OS yang cepat & memblokir antrean
+      const pass = window.prompt("Masukkan Passphrase untuk mengenkripsi file/video ini (Kosongkan untuk batal):", "");
+      if (pass) {
+        encConfig = { type: "passphrase", passphrase: pass };
+      } else {
+        toast.info("Upload dibatalkan karena Passphrase kosong.");
+        return;
+      }
+    } else if (typeof encryptOrConfig === "object") {
+      encConfig = encryptOrConfig;
+    }
+
     const item: QueueItem = {
       id: Math.random().toString(36).substr(2, 9),
       path: filename,
       url: url.trim(),
       folderId: folderId,
       status: "pending" as const,
-      encryptionConfig: encConfig || { type: "none" },
+      encryptionConfig: encConfig,
+      isVideoExtract: isVideo, // Indikator untuk mengaktifkan yt-dlp di processItem
     };
+
     setUploadQueue((prev) => [...prev, item]);
-    toast.info(`Queued remote upload`);
+    toast.info(isVideo ? `Mengantrekan Unduhan Video...` : `Queued remote upload`);
   };
 
-  // Mengembalikan fungsi pembatalan secara utuh
   const cancelAll = () => {
     setUploadQueue((q) => {
       const activeItems = q.filter((i) => i.status === "uploading" || i.status === "downloading");

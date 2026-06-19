@@ -22,13 +22,14 @@ export function useFileDownload(store: Store | null) {
   const cancelledRef = useRef<Set<string>>(new Set());
   const activeCountRef = useRef(0);
   const { settings } = useSettings();
-  // State untuk Modal Dekripsi
-  const [decryptRequest, setDecryptRequest] = useState<{ filename: string } | null>(null);
+
+  // State untuk Modal Dekripsi ditambahkan variabel attempt untuk hitung mundur
+  const [decryptRequest, setDecryptRequest] = useState<{ filename: string; attempt?: number; maxAttempts?: number } | null>(null);
   const decryptResolveRef = useRef<((passphrase: string | null) => void) | null>(null);
 
   // Fungsi untuk memanggil modal dan menunggu jawaban
-  const requestPassphrase = (filename: string): Promise<string | null> => {
-    setDecryptRequest({ filename });
+  const requestPassphrase = (filename: string, attempt: number = 1, maxAttempts: number = 3): Promise<string | null> => {
+    setDecryptRequest({ filename, attempt, maxAttempts });
     return new Promise((resolve) => {
       decryptResolveRef.current = resolve;
     });
@@ -122,6 +123,25 @@ export function useFileDownload(store: Store | null) {
         }
       }
 
+      const finalPath = savePath || item.filename;
+      const isGpg = finalPath.endsWith(".gpg");
+      let currentPassphrase: string | null = null;
+      const maxAttempts = 3;
+
+      // 1. MINTA PASSPHRASE SEBELUM DOWNLOAD DIMULAI
+      if (isGpg) {
+        currentPassphrase = await requestPassphrase(item.filename, 1, maxAttempts);
+
+        // Jika user menutup modal (null) tanpa input
+        if (currentPassphrase === null) {
+          toast.info(`Unduhan dibatalkan.`);
+          setDownloadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "cancelled" as const } : i)));
+          activeCountRef.current--;
+          return;
+        }
+      }
+
+      // 2. MULAI UNDUH FILE BINER
       await invoke("cmd_download_file", {
         req: {
           message_id: item.messageId,
@@ -134,45 +154,57 @@ export function useFileDownload(store: Store | null) {
       if (cancelledRef.current.has(item.id)) {
         cancelledRef.current.delete(item.id);
       } else {
-        setDownloadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "success", progress: 100 } : i)));
-
-        // --- AWAL LOGIKA DEKRIPSI OTOMATIS ---
-        const finalPath = savePath || item.filename;
-        if (finalPath.endsWith(".gpg")) {
+        // 3. LOGIKA DEKRIPSI OTOMATIS & SELF-DESTRUCT
+        if (isGpg) {
           toast.info(`Membuka segel GPG untuk ${item.filename}...`);
-          try {
-            // 1. Coba dekripsi otomatis tanpa password (Public Key)
-            const decryptedPath = await invoke<string>("cmd_gpg_decrypt_file", {
-              inputPath: finalPath,
-            });
-            const cleanName = decryptedPath.split(/[/\\]/).pop();
-            toast.success(`Berhasil didekripsi: ${cleanName}`);
-            await invoke("cmd_delete_temp_file", { path: finalPath }).catch(() => {});
-          } catch (decError) {
-            // 2. Jika gagal, JEDA SEMENTARA dan munculkan modal Passphrase
-            const pass = await requestPassphrase(item.filename);
+          let attempts = 1;
+          let success = false;
 
-            if (pass) {
-              try {
-                // 3. Coba dekripsi lagi menggunakan Passphrase
-                const decryptedPath = await invoke<string>("cmd_gpg_decrypt_file_with_passphrase", {
+          while (attempts <= maxAttempts && !success) {
+            try {
+              let decryptedPath;
+              // Eksekusi dekripsi berdasarkan input sandi (mendukung input kosong untuk pure-public-key)
+              if (currentPassphrase === "") {
+                decryptedPath = await invoke<string>("cmd_gpg_decrypt_file", { inputPath: finalPath });
+              } else {
+                decryptedPath = await invoke<string>("cmd_gpg_decrypt_file_with_passphrase", {
                   inputPath: finalPath,
-                  passphrase: pass,
+                  passphrase: currentPassphrase,
                 });
-                const cleanName = decryptedPath.split(/[/\\]/).pop();
-                toast.success(`Berhasil didekripsi dengan Passphrase: ${cleanName}`);
-                await invoke("cmd_delete_temp_file", { path: finalPath }).catch(() => {});
-              } catch (symError) {
-                toast.error(`Dekripsi gagal! Passphrase salah atau file rusak.`);
               }
-            } else {
-              toast.error(`Dekripsi dibatalkan. File ${item.filename} tetap .gpg`);
+
+              const cleanName = decryptedPath.split(/[/\\]/).pop();
+              toast.success(`Berhasil didekripsi: ${cleanName}`);
+
+              // Hapus file biner .gpg setelah sukses
+              await invoke("cmd_delete_temp_file", { path: finalPath }).catch(() => {});
+              success = true;
+            } catch (err) {
+              if (attempts >= maxAttempts) {
+                // EKSEKUSI SELF-DESTRUCT
+                toast.error(`Gagal 3 kali. File .gpg dihancurkan dari sistem.`);
+                await invoke("cmd_delete_temp_file", { path: finalPath }).catch(() => {});
+                throw new Error("Sandi salah 3 kali. File dihancurkan demi keamanan.");
+              } else {
+                // Tanyakan ulang sandi jika masih ada kesempatan
+                toast.error(`Sandi salah. Kesempatan sisa: ${maxAttempts - attempts}`);
+                attempts++;
+                currentPassphrase = await requestPassphrase(item.filename, attempts, maxAttempts);
+
+                if (currentPassphrase === null) {
+                  toast.error(`Dibatalkan. Menghapus file .gpg...`);
+                  await invoke("cmd_delete_temp_file", { path: finalPath }).catch(() => {});
+                  throw new Error("Dekripsi dibatalkan pengguna.");
+                }
+              }
             }
           }
+          setDownloadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "success", progress: 100 } : i)));
         } else {
+          // File normal non-gpg
+          setDownloadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "success", progress: 100 } : i)));
           toast.success(`Downloaded: ${item.filename}`);
         }
-        // --- AKHIR LOGIKA DEKRIPSI ---
       }
     } catch (e) {
       if (!cancelledRef.current.has(item.id)) {

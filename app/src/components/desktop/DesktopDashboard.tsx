@@ -24,7 +24,7 @@ import { ShareDialog } from "./dashboard/ShareDialog";
 import { RenameFolderModal } from "./dashboard/RenameFolderModal";
 import { RenameFileModal } from "./dashboard/RenameFileModal";
 import { RemoteUploadModal } from "./dashboard/RemoteUploadModal";
-import { Link, Copy, Check, X, Loader2, Share2, FileUp } from "lucide-react";
+import { Link, Copy, Check, X, Loader2, Share2 } from "lucide-react";
 import { UploadConfirmModal } from "./dashboard/UploadConfirmModal";
 import { DecryptPromptModal } from "./dashboard/DecryptPromptModal";
 
@@ -595,7 +595,15 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
             key="pdf-viewer"
           />
         )}
-        {showRemoteUpload && <RemoteUploadModal isOpen={showRemoteUpload} onClose={() => setShowRemoteUpload(false)} folders={folders} onUpload={(url, folderId) => handleUrlUpload(url, folderId)} key="remote-upload-modal" />}
+        {showRemoteUpload && (
+          <RemoteUploadModal
+            isOpen={showRemoteUpload}
+            onClose={() => setShowRemoteUpload(false)}
+            folders={folders}
+            onUpload={(url, folderId, encrypt, isVideo) => handleUrlUpload(url, folderId, encrypt, isVideo)}
+            key="remote-upload-modal"
+          />
+        )}
         {confirmPaths !== null && <UploadConfirmModal isOpen={confirmPaths !== null} paths={confirmPaths} onClose={() => setConfirmPaths(null)} onConfirm={confirmUpload} key="upload-confirm-modal" />}
         {confirmPaths !== null && <UploadConfirmModal isOpen={confirmPaths !== null} paths={confirmPaths} onClose={() => setConfirmPaths(null)} onConfirm={confirmUpload} key="upload-confirm-modal" />}
 
@@ -688,13 +696,6 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
           cardScale={cardScale}
           onCardScaleChange={setCardScale}
         />
-        {/* Tombol Upload Permanen (Melayang di kanan bawah) */}
-        <button
-          onClick={() => handleManualUpload()}
-          className="absolute bottom-8 right-8 z-[100] flex items-center gap-2 px-5 py-3 bg-telegram-primary text-white text-sm font-medium rounded-full shadow-lg hover:bg-telegram-primary/90 hover:scale-105 transition-all"
-        >
-          <FileUp className="w-5 h-5" /> Upload File
-        </button>
       </main>
 
       {previewFile && (

@@ -261,6 +261,16 @@ pub async fn cmd_generate_keypair(app: AppHandle, name: String, passphrase: Stri
     cert.as_tsk().serialize(&mut armorer).map_err(|e| format!("Gagal menyimpan TSK: {}", e))?;
     armorer.finalize().map_err(|e| e.to_string())?;
 
+    // 4. Ekstrak dan simpan Public Key agar terbaca oleh UI
+    let pub_dir = get_keyring_dir(&app);
+    if !pub_dir.exists() {
+        std::fs::create_dir_all(&pub_dir).map_err(|e| format!("Gagal membuat folder public key: {}", e))?;
+    }
+
+    let pub_path = pub_dir.join(format!("{}.asc", &fingerprint[..16]));
+    let pub_bytes = cert.armored().to_vec().map_err(|e| format!("Gagal mengekstrak Public Key: {}", e))?;
+    std::fs::write(&pub_path, pub_bytes).map_err(|e| format!("Gagal menyimpan Public Key: {}", e))?;
+
     Ok(GpgKeyInfo {
         fingerprint,
         user_id: name,

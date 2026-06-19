@@ -44,6 +44,7 @@ export function UploadConfirmModal({ isOpen, paths, onClose, onConfirm }: Props)
     setEncType("none");
     setPassphrase("");
     setSelectedKeys(keys.length > 0 ? [keys[0].fingerprint] : []);
+    onClose();
   };
 
   return (

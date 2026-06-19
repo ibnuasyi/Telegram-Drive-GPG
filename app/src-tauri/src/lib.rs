@@ -421,6 +421,112 @@ fn cmd_get_system_diagnostics(
     Ok(lines.join("\n"))
 }
 
+// yt-dlp functions
+#[tauri::command]
+pub async fn cmd_ensure_ytdlp(app: tauri::AppHandle) -> Result<String, String> {
+    use tokio::fs;
+    use std::env;
+
+    let local_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    
+    if !local_data_dir.exists() {
+        fs::create_dir_all(&local_data_dir).await.map_err(|e| e.to_string())?;
+    }
+
+    let (file_name, download_url) = match env::consts::OS {
+        "windows" => ("yt-dlp.exe", "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"),
+        "macos" => ("yt-dlp", "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"),
+        _ => ("yt-dlp", "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"),
+    };
+
+    let bin_path = local_data_dir.join(file_name);
+
+    if bin_path.exists() {
+        return Ok(bin_path.to_string_lossy().to_string());
+    }
+
+    log::info!("[yt-dlp] Binary tidak ditemukan. Mengunduh dari GitHub...");
+
+    let response = reqwest::get(download_url).await.map_err(|e| e.to_string())?;
+    let bytes = response.bytes().await.map_err(|e| e.to_string())?;
+    
+    fs::write(&bin_path, bytes).await.map_err(|e| e.to_string())?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&bin_path).await.map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&bin_path, perms).await.map_err(|e| e.to_string())?;
+    }
+
+    log::info!("[yt-dlp] Berhasil dipasang di: {:?}", bin_path);
+
+    Ok(bin_path.to_string_lossy().to_string())
+}
+
+// FUNGSI EKSEKUTOR YT-DLP (MENGUNDUH VIDEO KE TEMP)
+#[tauri::command]
+pub async fn cmd_ytdlp_download(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    use std::env;
+    use tokio::process::Command;
+
+    let local_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    
+    // Cari lokasi yt-dlp yang sudah diunduh di Fase 1
+    let file_name = match env::consts::OS {
+        "windows" => "yt-dlp.exe",
+        "macos" => "yt-dlp",
+        _ => "yt-dlp",
+    };
+    let bin_path = local_data_dir.join(file_name);
+
+    if !bin_path.exists() {
+        return Err("yt-dlp belum terpasang. Harap tunggu proses instalasi selesai.".to_string());
+    }
+
+    // Buat folder khusus untuk karantina unduhan
+    let download_dir = local_data_dir.join("temp_downloads");
+    tokio::fs::create_dir_all(&download_dir).await.map_err(|e| e.to_string())?;
+
+    // Format nama file: JudulVideo.mp4
+    let output_template = download_dir.join("%(title)s.%(ext)s").to_string_lossy().to_string();
+
+    log::info!("Mulai mengunduh video dari: {}", url);
+
+    // Eksekusi yt-dlp di latar belakang (Child Process)
+    let output = Command::new(&bin_path)
+        .args(&[
+            "--no-playlist", // Cegah unduh 100 video jika link berupa playlist
+            "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best", // Prioritaskan MP4 terbaik
+            "--merge-output-format", "mp4",
+            "-o", &output_template,
+            "--print", "after_move:filepath", // Minta yt-dlp mencetak path asli setelah selesai
+            &url
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("Gagal menjalankan yt-dlp: {}", e))?;
+
+    if !output.status.success() {
+        let err_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("yt-dlp error: {}", err_msg));
+    }
+
+    // Tangkap path file MP4 dari output yt-dlp
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let file_path = stdout.lines().last().unwrap_or("").trim().to_string();
+
+    if file_path.is_empty() || !std::path::Path::new(&file_path).exists() {
+        return Err("Gagal menemukan file hasil unduhan di dalam folder temporary.".to_string());
+    }
+
+    log::info!("Video berhasil diunduh ke karantina: {}", file_path);
+
+    // Kembalikan path absolut file ke React
+    Ok(file_path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::init();
@@ -732,6 +838,8 @@ pub fn run() {
             commands::gpg::cmd_gpg_encrypt_file_symmetric,
             commands::gpg::cmd_delete_temp_file,
             commands::gpg::cmd_fetch_wkd_key_by_email,
+            cmd_ensure_ytdlp,
+            cmd_ytdlp_download,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

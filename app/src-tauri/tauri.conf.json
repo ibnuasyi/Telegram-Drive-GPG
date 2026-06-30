@@ -12,7 +12,7 @@
     }
   },
   "productName": "Cicem Drive",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "identifier": "net.cicem.app",
   "build": {
     "beforeDevCommand": "npm run dev",

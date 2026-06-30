@@ -108,13 +108,21 @@ export function useFileDownload(store: Store | null) {
         if (isAndroidPlatform) {
           savePath = item.filename;
         } else {
-          savePath = await pickWithFallback(
-            () => save({ defaultPath: item.filename }),
-            () => {
-              setDownloadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "pending" as const, error: undefined } : i)));
-            },
-            { errorTitle: "Save dialog failed" },
-          );
+          // Wrapper dengan timeout untuk mencegah hang
+          const saveDialogPromise = save({ defaultPath: item.filename });
+          const timeoutPromise = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 30000));
+
+          const result = await Promise.race([saveDialogPromise, timeoutPromise]);
+
+          if (result === 'timeout') {
+            toast.error("Save dialog timeout. Please try again.");
+            setDownloadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "pending" as const, error: "Dialog timeout" } : i)));
+            activeCountRef.current--;
+            return;
+          }
+
+          savePath = result;
+
           if (!savePath) {
             setDownloadQueue((q) => q.filter((i) => i.id !== item.id));
             activeCountRef.current--;

@@ -150,10 +150,9 @@ pub async fn cmd_gpg_encrypt_file(
     // 1. Muat semua sertifikat ke dalam memori agar referensinya tetap hidup (Rust Lifetime rule)
     let mut certs = Vec::new();
     for fingerprint in &fingerprints {
-        // Ambil 16 karakter terakhir jika fingerprint yang dikirim berupa full string
-        let fp_len = fingerprint.len();
-        let short_fp = if fp_len >= 16 {
-            &fingerprint[fp_len - 16..]
+        // Ambil 16 karakter PERTAMA untuk mencocokkan dengan nama file saat generate
+        let short_fp = if fingerprint.len() >= 16 {
+            &fingerprint[..16]
         } else {
             fingerprint
         };
@@ -195,7 +194,23 @@ pub async fn cmd_gpg_encrypt_file(
     }
 
     let output_path = format!("{}.gpg", input_path);
-    
+
+    // Ekstrak filename asli dari path untuk disimpan dalam encrypted packet
+    let original_filename = std::path::Path::new(&input_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    // Baca file asli dan preload ke memory (untuk file kecil/medium)
+    let file_bytes = std::fs::read(&input_path)
+        .map_err(|e| format!("Gagal membaca file sumber: {}", e))?;
+
+    // Format header: "CICEM_FNAME:<nama_file>\n" + konten asli
+    let header = format!("CICEM_FNAME:{}\n", original_filename);
+    let mut payload: Vec<u8> = header.into_bytes();
+    payload.extend_from_slice(&file_bytes);
+
     // --- Membangun Pipa Streaming Enkripsi (Aman untuk RAM jika file raksasa) ---
     let mut output_file = File::create(&output_path)
         .map_err(|e| format!("Gagal membuat file tujuan: {}", e))?;
@@ -214,10 +229,8 @@ pub async fn cmd_gpg_encrypt_file(
         .build()
         .map_err(|e| format!("Gagal membuat literal writer: {}", e))?;
 
-    let mut input_file = File::open(&input_path)
-        .map_err(|e| format!("Gagal membuka file sumber: {}", e))?;
-    
-    std::io::copy(&mut input_file, &mut literal_writer)
+    // Tulis payload (header + konten asli) ke literal writer
+    std::io::copy(&mut payload.as_slice(), &mut literal_writer)
         .map_err(|e| format!("Gagal mengalirkan data file: {}", e))?;
 
     literal_writer.finalize()
@@ -281,6 +294,7 @@ pub async fn cmd_generate_keypair(app: AppHandle, name: String, passphrase: Stri
 }
 
 /// Command: Import Private Key dari drag-and-drop (teks .asc)
+/// Untuk keypair sendiri - menyimpan baik private maupun public key
 #[tauri::command]
 pub async fn cmd_import_private_key(app: AppHandle, armored_key: String) -> Result<GpgKeyInfo, String> {
     let cert = Cert::from_bytes(armored_key.as_bytes())
@@ -295,11 +309,18 @@ pub async fn cmd_import_private_key(app: AppHandle, armored_key: String) -> Resu
         .map(|u| String::from_utf8_lossy(u.userid().value()).to_string())
         .unwrap_or_else(|| "Unknown".to_string());
 
+    // 1. Simpan Private Key
     let priv_dir = get_private_keyring_dir(&app);
     std::fs::create_dir_all(&priv_dir).map_err(|e| e.to_string())?;
+    let priv_key_path = priv_dir.join(format!("{}_secret.asc", &fingerprint[..16]));
+    std::fs::write(&priv_key_path, &armored_key).map_err(|e| format!("Gagal menyimpan Private Key: {}", e))?;
 
-    let key_path = priv_dir.join(format!("{}_secret.asc", &fingerprint[..16]));
-    std::fs::write(&key_path, &armored_key).map_err(|e| format!("Gagal menyimpan Private Key: {}", e))?;
+    // 2. ALSO simpan Public Key ke keyring agar muncul di Saved Keys
+    let pub_dir = get_keyring_dir(&app);
+    std::fs::create_dir_all(&pub_dir).map_err(|e| e.to_string())?;
+    let pub_key_path = pub_dir.join(format!("{}.asc", &fingerprint[..16]));
+    let pub_bytes = cert.armored().to_vec().map_err(|e| format!("Gagal mengekstrak Public Key: {}", e))?;
+    std::fs::write(&pub_key_path, &pub_bytes).map_err(|e| format!("Gagal menyimpan Public Key: {}", e))?;
 
     Ok(GpgKeyInfo {
         fingerprint,
@@ -315,6 +336,23 @@ pub async fn cmd_gpg_encrypt_file_symmetric(
     passphrase: String,
 ) -> Result<String, String> {
     let output_path = format!("{}.gpg", input_path);
+
+    // Ekstrak filename asli dari path untuk disimpan dalam encrypted packet
+    let original_filename = std::path::Path::new(&input_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
+    // Baca file asli dan preload ke memory
+    let file_bytes = std::fs::read(&input_path)
+        .map_err(|e| format!("Gagal membaca file sumber: {}", e))?;
+
+    // Format header: "CICEM_FNAME:<nama_file>\n" + konten asli
+    let header = format!("CICEM_FNAME:{}\n", original_filename);
+    let mut payload: Vec<u8> = header.into_bytes();
+    payload.extend_from_slice(&file_bytes);
+
     let mut output_file = File::create(&output_path)
         .map_err(|e| format!("Gagal membuat file tujuan: {}", e))?;
 
@@ -336,11 +374,8 @@ pub async fn cmd_gpg_encrypt_file_symmetric(
         .build()
         .map_err(|e| format!("Gagal membuat literal writer: {}", e))?;
 
-    let mut input_file = File::open(&input_path)
-        .map_err(|e| format!("Gagal membuka file sumber: {}", e))?;
-    
-    // Alirkan data ke dalam mesin enkripsi
-    std::io::copy(&mut input_file, &mut literal_writer)
+    // Tulis payload (header + konten asli) ke literal writer
+    std::io::copy(&mut payload.as_slice(), &mut literal_writer)
         .map_err(|e| format!("Gagal mengalirkan data file: {}", e))?;
 
     literal_writer.finalize()
@@ -506,15 +541,8 @@ pub async fn cmd_gpg_decrypt_file(
     input_path: String,
     passphrase: Option<String>,
 ) -> Result<String, String> {
-    let output_path = input_path.strip_suffix(".gpg")
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| format!("{}_decrypted", input_path));
-
     let mut input_file = File::open(&input_path)
         .map_err(|e| format!("Gagal membuka file terenkripsi: {}", e))?;
-        
-    let mut output_file = File::create(&output_path)
-        .map_err(|e| format!("Gagal membuat file hasil dekripsi: {}", e))?;
 
     let helper = DecryptDetective {
         app: &app,
@@ -529,7 +557,66 @@ pub async fn cmd_gpg_decrypt_file(
         .with_policy(&policy, None, helper)
         .map_err(|e| format!("Gagal memuat dekriptor (Pastikan kata sandi / kunci benar): {}", e))?;
 
-    std::io::copy(&mut decryptor, &mut output_file)
+    // Baca seluruh konten yang didekripsi
+    use std::io::Read;
+    let mut decrypted_bytes = Vec::new();
+    decryptor.read_to_end(&mut decrypted_bytes)
+        .map_err(|e| format!("Gagal membaca data yang didekripsi: {}", e))?;
+
+    // Cari header "CICEM_FNAME:" dalam data binary (bukan sebagai UTF-8 string)
+    // Header marker bytes
+    let header_marker = b"CICEM_FNAME:";
+    let mut content_start = 0;
+    let mut extracted_filename: Option<String> = None;
+
+    // Cari posisi header dalam data
+    for i in 0..decrypted_bytes.len().saturating_sub(header_marker.len()) {
+        if &decrypted_bytes[i..i + header_marker.len()] == header_marker {
+            // Found header! Sekarang cari newline setelah nama file
+            let name_start = i + header_marker.len();
+            for j in name_start..decrypted_bytes.len() {
+                if decrypted_bytes[j] == b'\n' {
+                    // Ekstrak nama file
+                    if let Ok(filename) = std::str::from_utf8(&decrypted_bytes[name_start..j]) {
+                        if !filename.is_empty() {
+                            extracted_filename = Some(filename.to_string());
+                            content_start = j + 1;
+                        }
+                    }
+                    break;
+                }
+            }
+            break;
+        }
+    }
+
+    // Tentukan output path
+    let mut output_path = input_path.strip_suffix(".gpg")
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("{}_decrypted", input_path));
+
+    if let Some(ref filename) = extracted_filename {
+        // Ganti nama file output dengan nama asli
+        let parent = std::path::Path::new(&output_path).parent();
+        if let Some(parent_dir) = parent {
+            output_path = parent_dir.join(filename).to_string_lossy().to_string();
+        } else {
+            output_path = filename.clone();
+        }
+    }
+
+    // Ambil konten tanpa header
+    let final_content = if content_start > 0 {
+        &decrypted_bytes[content_start..]
+    } else {
+        &decrypted_bytes[..]
+    };
+
+    // Tulis file hasil dekripsi
+    let mut output_file = File::create(&output_path)
+        .map_err(|e| format!("Gagal membuat file hasil dekripsi: {}", e))?;
+
+    std::io::copy(&mut final_content.to_vec().as_slice(), &mut output_file)
         .map_err(|e| format!("Gagal menulis data yang didekripsi: {}", e))?;
 
     Ok(output_path)
@@ -556,4 +643,79 @@ pub async fn cmd_gpg_decrypt_file_with_passphrase(
 ) -> Result<String, String> {
     // Memanfaatkan fungsi utama dengan mengisi nilai Some(passphrase)
     cmd_gpg_decrypt_file(app, input_path, Some(passphrase)).await
+}
+
+/// Command: Export Public Key
+#[tauri::command]
+pub async fn cmd_export_public_key(app: AppHandle, fingerprint: String) -> Result<String, String> {
+    let keyring_dir = get_keyring_dir(&app);
+    let short_fp = if fingerprint.len() >= 16 {
+        &fingerprint[..16]
+    } else {
+        &fingerprint
+    };
+
+    let key_path = keyring_dir.join(format!("{}.asc", short_fp));
+
+    if !key_path.exists() {
+        return Err(format!("Kunci publik dengan fingerprint {} tidak ditemukan.", fingerprint));
+    }
+
+    std::fs::read_to_string(&key_path)
+        .map_err(|e| format!("Gagal membaca file kunci: {}", e))
+}
+
+/// Command: Export Private Key
+#[tauri::command]
+pub async fn cmd_export_private_key(app: AppHandle, fingerprint: String) -> Result<String, String> {
+    let priv_dir = get_private_keyring_dir(&app);
+    let short_fp = if fingerprint.len() >= 16 {
+        &fingerprint[..16]
+    } else {
+        &fingerprint
+    };
+
+    let key_path = priv_dir.join(format!("{}_secret.asc", short_fp));
+
+    if !key_path.exists() {
+        return Err(format!("Kunci privat dengan fingerprint {} tidak ditemukan.", fingerprint));
+    }
+
+    std::fs::read_to_string(&key_path)
+        .map_err(|e| format!("Gagal membaca file kunci: {}", e))
+}
+
+/// Command: Delete Key (deletes both public and private key files)
+#[tauri::command]
+pub async fn cmd_delete_gpg_key(app: AppHandle, fingerprint: String) -> Result<(), String> {
+    let short_fp = if fingerprint.len() >= 16 {
+        &fingerprint[..16]
+    } else {
+        &fingerprint
+    };
+
+    // Hapus public key
+    let pub_dir = get_keyring_dir(&app);
+    let pub_path = pub_dir.join(format!("{}.asc", short_fp));
+    if pub_path.exists() {
+        std::fs::remove_file(&pub_path)
+            .map_err(|e| format!("Gagal menghapus kunci publik: {}", e))?;
+    }
+
+    // Hapus private key
+    let priv_dir = get_private_keyring_dir(&app);
+    let priv_path = priv_dir.join(format!("{}_secret.asc", short_fp));
+    if priv_path.exists() {
+        std::fs::remove_file(&priv_path)
+            .map_err(|e| format!("Gagal menghapus kunci privat: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Command: Write file to user-selected path (used for export)
+#[tauri::command]
+pub async fn cmd_write_file_to_path(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, &content)
+        .map_err(|e| format!("Gagal menulis file ke {}: {}", path, e))
 }

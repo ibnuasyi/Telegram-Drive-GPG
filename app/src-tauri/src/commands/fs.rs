@@ -1084,6 +1084,12 @@ pub async fn cmd_download_file(
     #[cfg(not(target_os = "android"))]
     let actual_save_path = save_path.clone();
 
+    // Validate save_path - ensure it's not empty
+    #[cfg(not(target_os = "android"))]
+    if actual_save_path.is_empty() {
+        return Err("Save path is empty. Please select a download location.".to_string());
+    }
+
     let client_opt = { state.client.lock().await.clone() };
     #[cfg(debug_assertions)]
     if client_opt.is_none() { 

@@ -141,6 +141,9 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
       if (item.isVideoExtract && item.url) {
         setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "downloading", progress: 0 } : i)));
 
+        // Pastikan yt-dlp terinstal terlebih dahulu
+        await invoke<string>("cmd_ensure_ytdlp");
+
         // Memanggil Rust untuk mengunduh video ke folder /temp
         filePathToUpload = await invoke<string>("cmd_ytdlp_download", { url: item.url });
 
@@ -352,6 +355,10 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
     );
   };
 
+  const removeItem = (id: string) => {
+    setUploadQueue((q) => q.filter((i) => i.id !== id));
+  };
+
   return {
     uploadQueue,
     setUploadQueue,
@@ -362,6 +369,7 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
     cancelAll,
     cancelItem,
     retryItem,
+    removeItem,
     confirmPaths,
     setConfirmPaths,
     confirmUpload,

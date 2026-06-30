@@ -874,9 +874,9 @@ export function AdaptiveMediaPlayer({
                         </div>
                     )}
 
-                    {/* Error display */}
-                    {(displayPhase === 'error' || displayPhase === 'failed') && (
-                        <div className="flex flex-col items-center gap-3 text-white px-8">
+                    {/* Error display - hide when fallback is active (native player will handle it) */}
+                    {(displayPhase === 'error' || displayPhase === 'failed') && !useFallback && (
+                        <div className="flex flex-col items-center gap-3 text-white px-8 z-20">
                             <AlertTriangle className="w-10 h-10 text-red-400" />
                             <p className="text-sm text-red-400 font-medium">Playback Error</p>
                             <p className="text-xs text-white/40 text-center max-w-md">{displayError || 'Unknown error'}</p>

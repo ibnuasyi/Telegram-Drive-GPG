@@ -111,6 +111,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
     cancelAll: cancelUploads,
     cancelItem: cancelUploadItem,
     retryItem: retryUploadItem,
+    removeItem: removeUploadItem,
     confirmPaths,
     setConfirmPaths,
     confirmUpload,
@@ -605,7 +606,6 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
           />
         )}
         {confirmPaths !== null && <UploadConfirmModal isOpen={confirmPaths !== null} paths={confirmPaths} onClose={() => setConfirmPaths(null)} onConfirm={confirmUpload} key="upload-confirm-modal" />}
-        {confirmPaths !== null && <UploadConfirmModal isOpen={confirmPaths !== null} paths={confirmPaths} onClose={() => setConfirmPaths(null)} onConfirm={confirmUpload} key="upload-confirm-modal" />}
 
         {/* MODAL DEKRIPSI PASANG DI SINI */}
         <DecryptPromptModal request={decryptRequest} onSubmit={submitPassphrase} />
@@ -733,6 +733,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
         onCancelAll={cancelUploads}
         onCancelItem={cancelUploadItem}
         onRetryItem={retryUploadItem}
+        onRemoveItem={removeUploadItem}
       />
       <DownloadQueue items={downloadQueue} onClearFinished={clearDownloads} onCancelAll={cancelDownloads} onCancelItem={cancelDownloadItem} onRetryItem={retryDownloadItem} />
 

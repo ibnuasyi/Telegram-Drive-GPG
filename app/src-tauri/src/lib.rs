@@ -840,6 +840,10 @@ pub fn run() {
             commands::gpg::cmd_gpg_encrypt_file_symmetric,
             commands::gpg::cmd_delete_temp_file,
             commands::gpg::cmd_fetch_wkd_key_by_email,
+            commands::gpg::cmd_export_public_key,
+            commands::gpg::cmd_export_private_key,
+            commands::gpg::cmd_delete_gpg_key,
+            commands::gpg::cmd_write_file_to_path,
             ytdlp_core::cmd_ensure_ytdlp,
             ytdlp_core::cmd_ytdlp_download,
         ])

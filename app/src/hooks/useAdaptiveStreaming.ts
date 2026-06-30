@@ -10,6 +10,24 @@ import {
 import { useStreamingSettings } from './useStreamingSettings';
 import { getCachedMoov, setCachedMoov, extractCacheKey } from './moovCache';
 
+// ── Error Message Helper ──────────────────────────────────────────────
+
+/**
+ * Sanitize mp4box error messages for user display.
+ * Filters out technical mp4box parsing errors and provides cleaner messages.
+ */
+function sanitizeErrorMessage(message: string): string {
+    // Filter out technical mp4box parsing errors
+    if (message.includes('Invalid data found while parsing box')) {
+        return 'Video format not supported for streaming. Will use fallback player.';
+    }
+    if (message.includes('box of type')) {
+        return 'Video has corrupted metadata. Will use fallback player.';
+    }
+    // Keep original message if nothing matched
+    return message;
+}
+
 // ── Types ────────────────────────────────────────────────────────────
 
 interface Mp4Track {
@@ -434,7 +452,7 @@ export function useAdaptiveStreaming(
                 console.error('[AdaptiveStreaming] Download error:', err);
                 if (playerPhaseRef.current !== 'error') {
                     playerPhaseRef.current = 'error';
-                    setState(s => ({ ...s, phase: 'error', error: String(err) }));
+                    setState(s => ({ ...s, phase: 'error', error: sanitizeErrorMessage(String(err)) }));
                     // Fall back to native <video> — download stream failed
                     setDynamicFallback(true);
                 }
@@ -728,7 +746,7 @@ export function useAdaptiveStreaming(
                 console.error('[AdaptiveStreaming] Playback mp4box error:', message);
                 if (playerPhaseRef.current !== 'error') {
                     playerPhaseRef.current = 'error';
-                    setState(s => ({ ...s, phase: 'error', error: message }));
+                    setState(s => ({ ...s, phase: 'error', error: sanitizeErrorMessage(message) }));
                     setDynamicFallback(true);
                 }
             };
@@ -957,7 +975,7 @@ export function useAdaptiveStreaming(
             console.error('[AdaptiveStreaming] mp4box error:', message);
             if (playerPhaseRef.current !== 'error') {
                 playerPhaseRef.current = 'error';
-                setState(s => ({ ...s, phase: 'error', error: message }));
+                setState(s => ({ ...s, phase: 'error', error: sanitizeErrorMessage(message) }));
                 // Fall back to native <video> — mp4box cannot parse this file
                 setDynamicFallback(true);
             }

@@ -15,9 +15,10 @@ interface UploadQueueProps {
     onCancelAll: () => void;
     onCancelItem: (id: string) => void;
     onRetryItem: (id: string) => void;
+    onRemoveItem?: (id: string) => void;
 }
 
-export function UploadQueue({ items, onClearFinished, onCancelAll, onCancelItem, onRetryItem }: UploadQueueProps) {
+export function UploadQueue({ items, onClearFinished, onCancelAll, onCancelItem, onRetryItem, onRemoveItem }: UploadQueueProps) {
     if (items.length === 0) return null;
 
     const hasPendingOrActive = items.some(i => i.status === 'pending' || i.status === 'uploading' || i.status === 'downloading');
@@ -57,9 +58,16 @@ export function UploadQueue({ items, onClearFinished, onCancelAll, onCancelItem,
                                 </button>
                             )}
                             {(item.status === 'error' || item.status === 'cancelled') && (
-                                <button onClick={() => onRetryItem(item.id)} className="text-gray-400 hover:text-blue-400 transition-colors flex-shrink-0" title="Retry">
-                                    <RotateCcw className="w-3.5 h-3.5" />
-                                </button>
+                                <>
+                                    <button onClick={() => onRetryItem(item.id)} className="text-gray-400 hover:text-blue-400 transition-colors flex-shrink-0" title="Retry">
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                    </button>
+                                    {onRemoveItem && (
+                                        <button onClick={() => onRemoveItem(item.id)} className="text-gray-400 hover:text-red-400 transition-colors flex-shrink-0" title="Dismiss">
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+                                </>
                             )}
                         </div>
                         {(item.status === 'uploading' || item.status === 'downloading') && (

@@ -129,6 +129,8 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
 
     // Jika isVideoExtract true, ini akan berubah menjadi upload file LOKAL
     let isRemoteUrlUpload = !!item.url && !item.isVideoExtract;
+    // Untuk remote URL dengan encryption, kita perlu download dulu ke temp, baru upload
+    let needsDownloadForEncryption = isRemoteUrlUpload && item.encryptionConfig && item.encryptionConfig.type !== "none";
 
     const initialStatus = isRemoteUrlUpload ? "downloading" : "uploading";
     setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: initialStatus, progress: 0 } : i)));
@@ -153,22 +155,50 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
         setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "uploading", progress: 0 } : i)));
       }
 
+      // --- FASE 1B: REMOTE URL DENGAN ENCRYPTION - DOWNLOAD DULU KE TEMP ---
+      if (needsDownloadForEncryption && item.url) {
+        console.log("[DEBUG] Remote URL with encryption - downloading to temp first...");
+
+        // Download file ke temp folder
+        const tempDir = await invoke<string>("cmd_get_temp_dir");
+        const tempPath = await invoke<string>("cmd_download_to_temp", { url: item.url, tempDir });
+        filePathToUpload = tempPath;
+        tempFilesToClean.push(tempPath);
+
+        setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "uploading", progress: 0 } : i)));
+      }
+
       // --- FASE 2: ROUTER ENKRIPSI ---
-      if (item.encryptionConfig && item.encryptionConfig.type !== "none" && !isRemoteUrlUpload) {
+      console.log("[DEBUG] Encryption check:", {
+        encryptionConfig: item.encryptionConfig,
+        isRemoteUrlUpload,
+        isVideoExtract: item.isVideoExtract,
+        needsDownloadForEncryption
+      });
+
+      // Encryption berlaku untuk: file lokal, video extract, ATAU remote URL dengan encryption
+      const shouldEncrypt = item.encryptionConfig && item.encryptionConfig.type !== "none" && !isRemoteUrlUpload || needsDownloadForEncryption;
+
+      if (shouldEncrypt) {
         setUploadQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: "uploading" as const } : i)));
 
         let encryptedPath = "";
-        if (item.encryptionConfig.type === "passphrase" && item.encryptionConfig.passphrase) {
+        console.log("[DEBUG] Starting encryption with type:", item.encryptionConfig?.type);
+
+        if (item.encryptionConfig?.type === "passphrase" && item.encryptionConfig?.passphrase) {
+          console.log("[DEBUG] Encrypting with passphrase...");
           encryptedPath = await invoke<string>("cmd_gpg_encrypt_file_symmetric", {
             inputPath: filePathToUpload,
             passphrase: item.encryptionConfig.passphrase,
           });
-        } else if (item.encryptionConfig.type === "public_key" && item.encryptionConfig.fingerprints) {
+        } else if (item.encryptionConfig?.type === "public_key" && item.encryptionConfig?.fingerprints) {
+          console.log("[DEBUG] Encrypting with public key, fingerprints:", item.encryptionConfig.fingerprints);
           encryptedPath = await invoke<string>("cmd_gpg_encrypt_file", {
             inputPath: filePathToUpload,
             fingerprints: item.encryptionConfig.fingerprints,
           });
         }
+        console.log("[DEBUG] Encryption result:", encryptedPath);
 
         if (encryptedPath) {
           filePathToUpload = encryptedPath;
@@ -178,9 +208,11 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
       }
 
       // --- FASE 3: UPLOAD KE TELEGRAM ---
-      if (isRemoteUrlUpload) {
+      if (isRemoteUrlUpload && !needsDownloadForEncryption) {
+        // Remote URL tanpa encryption - upload langsung dari URL
         await invoke("cmd_upload_from_url", { url: item.url, folderId: item.folderId, transferId: item.id });
       } else {
+        // File lokal, video extract, atau remote URL dengan encryption
         await invoke("cmd_upload_file", { path: filePathToUpload, folderId: item.folderId, transferId: item.id });
       }
 

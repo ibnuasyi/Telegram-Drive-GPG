@@ -478,7 +478,7 @@ pub mod ytdlp_core {
         use tokio::process::Command;
 
         let local_data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-        
+
         let file_name = match env::consts::OS {
             "windows" => "yt-dlp.exe",
             "macos" => "yt-dlp",
@@ -496,33 +496,84 @@ pub mod ytdlp_core {
         let output_template = download_dir.join("%(title)s.%(ext)s").to_string_lossy().to_string();
 
         log::info!("Mulai mengunduh video dari: {}", url);
+        log::info!("Output template: {}", output_template);
 
-        let output = Command::new(&bin_path)
-            .args(&[
-                "--no-playlist",
-                "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-                "--merge-output-format", "mp4",
-                "-o", &output_template,
-                "--print", "after_move:filepath",
-                &url
-            ])
-            .output()
-            .await
-            .map_err(|e| format!("Gagal menjalankan yt-dlp: {}", e))?;
+        // Build yt-dlp command
+        let mut cmd = Command::new(&bin_path);
+        cmd.args(&[
+            "--no-playlist",
+            "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "--merge-output-format", "mp4",
+            "-o", &output_template,
+            "--no-progress",
+            &url
+        ]);
 
-        if !output.status.success() {
-            let err_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("yt-dlp error: {}", err_msg));
+        log::info!("Executing yt-dlp...");
+
+        // Run yt-dlp with hidden window on Windows
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let output = cmd
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output()
+                .await
+                .map_err(|e| format!("Gagal menjalankan yt-dlp: {}", e))?;
+
+            log::info!("yt-dlp exit status: {:?}", output.status);
+
+            if !output.status.success() {
+                let err_msg = String::from_utf8_lossy(&output.stderr);
+                let out_msg = String::from_utf8_lossy(&output.stdout);
+                log::error!("yt-dlp FAILED!");
+                log::error!("yt-dlp stderr: {}", err_msg);
+                log::error!("yt-dlp stdout: {}", out_msg);
+                return Err(format!("yt-dlp error: {}", err_msg));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            log::info!("yt-dlp stdout: {}", stdout);
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let file_path = stdout.lines().last().unwrap_or("").trim().to_string();
+        #[cfg(not(windows))]
+        {
+            let output = cmd
+                .output()
+                .await
+                .map_err(|e| format!("Gagal menjalankan yt-dlp: {}", e))?;
 
-        if file_path.is_empty() || !std::path::Path::new(&file_path).exists() {
-            return Err("Gagal menemukan file hasil unduhan di dalam folder temporary.".to_string());
+            if !output.status.success() {
+                let err_msg = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("yt-dlp error: {}", err_msg));
+            }
         }
 
-        log::info!("Video berhasil diunduh ke karantina: {}", file_path);
+        // Find the downloaded file - yt-dlp saves to temp_downloads with the title
+        // List files in download dir and find the mp4
+        let mut found_file: Option<String> = None;
+
+        let mut entries = tokio::fs::read_dir(&download_dir).await.map_err(|e| e.to_string())?;
+        while let Some(entry) = entries.next_entry().await.map_err(|e| e.to_string())? {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            // Look for video files
+            if name.ends_with(".mp4") || name.ends_with(".mkv") || name.ends_with(".webm") || name.ends_with(".avi") {
+                if path.is_file() {
+                    let file_size = tokio::fs::metadata(&path).await.map_err(|e| e.to_string())?.len();
+                    if file_size > 0 {
+                        found_file = Some(path.to_string_lossy().to_string());
+                        log::info!("Found downloaded file: {} ({} bytes)", found_file.as_ref().unwrap(), file_size);
+                        break;
+                    }
+                }
+            }
+        }
+
+        let file_path = found_file.ok_or_else(|| {
+            log::error!("No video file found in download directory: {:?}", download_dir);
+            "Gagal menemukan file hasil unduhan di dalam folder temporary.".to_string()
+        })?;
 
         Ok(file_path)
     }
@@ -798,6 +849,8 @@ pub fn run() {
             commands::cmd_delete_image_thumbnail,
             commands::cmd_zip_folder,
             commands::cmd_delete_temp_zip,
+            commands::cmd_get_temp_dir,
+            commands::cmd_download_to_temp,
             commands::cmd_apply_proxy_settings,
             commands::cmd_apply_vpn_settings,
             commands::cmd_get_network_config,

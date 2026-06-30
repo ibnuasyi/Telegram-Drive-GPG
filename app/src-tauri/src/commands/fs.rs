@@ -1,4 +1,4 @@
-use tauri::{State, Emitter};
+use tauri::{State, Emitter, Manager};
 use std::sync::Arc;
 use grammers_client::types::{Media, Peer};
 use grammers_client::InputMessage;
@@ -1916,6 +1916,63 @@ struct RemoteProgressPayload {
     speed: u64,
     uploaded_bytes: u64,
     total_bytes: u64,
+}
+
+#[tauri::command]
+pub async fn cmd_get_temp_dir(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let local_data_dir = app_handle.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let temp_dir = local_data_dir.join("temp_downloads");
+    tokio::fs::create_dir_all(&temp_dir).await.map_err(|e| e.to_string())?;
+    Ok(temp_dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn cmd_download_to_temp(
+    url: String,
+    temp_dir: String,
+) -> Result<String, String> {
+    log::info!("Downloading URL to temp: {}", url);
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let res = client.get(&url).send().await.map_err(|e| e.to_string())?;
+
+    // Get filename from Content-Disposition or URL
+    let filename = res.headers()
+        .get(reqwest::header::CONTENT_DISPOSITION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|header_value| {
+            header_value.split(';')
+                .map(|p| p.trim())
+                .find(|p| p.starts_with("filename="))
+                .and_then(|p| p.strip_prefix("filename="))
+                .map(|f| f.trim_matches('"').to_string())
+        })
+        .unwrap_or_else(|| {
+            url.split('/')
+                .last()
+                .unwrap_or("downloaded_file")
+                .split('?')
+                .next()
+                .unwrap_or("downloaded_file")
+                .to_string()
+        });
+
+    let temp_path = std::path::Path::new(&temp_dir).join(&filename);
+    let temp_path_str = temp_path.to_string_lossy().to_string();
+
+    log::info!("Downloading to: {}", temp_path_str);
+
+    let bytes = res.bytes().await.map_err(|e| e.to_string())?;
+    tokio::fs::write(&temp_path, &bytes).await.map_err(|e| e.to_string())?;
+
+    log::info!("Download complete: {} bytes", bytes.len());
+
+    Ok(temp_path_str)
 }
 
 #[tauri::command]
